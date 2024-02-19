@@ -5,13 +5,15 @@ from torch.nn import functional as F
 
 class BigramModel(nn.Module):
     """Bigram language model."""
-    def __init__(self, vocab_size: int) -> None:
+    def __init__(self, vocab_size: int, embed_size: int) -> None:
         super().__init__()
-        self.token_embedding = nn.Embedding(vocab_size, vocab_size)
+        self.token_embedding = nn.Embedding(vocab_size, embed_size)
+        self.head = nn.Linear(embed_size, vocab_size)
         
     def forward(self, inputs: torch.Tensor, targets: torch.Tensor = None) -> tuple[torch.Tensor, None|torch.Tensor]:
         # inputs and targets are (B, T).
-        logits = self.token_embedding(inputs)  # (B, T, C).
+        embeddings = self.token_embedding(inputs)  # (B, T, embed_size).
+        logits = self.head(embeddings)  # (B, T, vocab_size).
         
         loss = None
         

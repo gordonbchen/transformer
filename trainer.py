@@ -96,7 +96,7 @@ def plot_loss(loss_steps: list[int], train_losses: list[float], val_losses: list
 if __name__ == "__main__":
     vocab, train_data, val_data = get_shakespeare_vocab_data(val_split=0.1)
 
-    bigram_model = BigramModel(vocab_size=len(vocab))
+    bigram_model = BigramModel(vocab_size=len(vocab), embed_size=32)
 
     loss_steps, train_losses, val_losses = train_model(
         bigram_model,
@@ -110,7 +110,7 @@ if __name__ == "__main__":
         eval_steps=100
     )
 
-    plot_loss(loss_steps, train_losses, val_losses, save_path=Path("loss_plots/bigram"))
+    plot_loss(loss_steps, train_losses, val_losses, save_path=Path("loss_plots/bigram_with_linear_head"))
 
     input_prompt_tokens = torch.zeros((1, 1), dtype=torch.int64, device=device)
     new_tokens = bigram_model.generate(input_prompt_tokens, n_tokens=500)
