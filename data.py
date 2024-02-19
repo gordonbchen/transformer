@@ -54,10 +54,3 @@ def train_val_split(data: torch.Tensor, val_split: float) -> tuple[torch.Tensor,
     val_data = data[:n_val_samples]
     train_data = data[n_val_samples:]
     return train_data, val_data
-
-
-if __name__ == "__main__":
-    vocab, train_data, val_data = get_shakespeare_vocab_data(val_split=0.1)
-    print(f"Vocab: {''.join(vocab)}")
-    print(f"Data: {train_data[:100]}")
-    print(f"Text: {decode(train_data[:100].tolist(), vocab)}")
