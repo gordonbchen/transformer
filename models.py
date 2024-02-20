@@ -8,14 +8,15 @@ from hyperparams import HyperParms as HP
 class BigramModel(nn.Module):
     """Bigram language model."""
 
-    def __init__(self, vocab_size: int, embed_size: int, block_size: int) -> None:
+    def __init__(self, vocab_size: int, embed_size: int, block_size: int, n_heads: int) -> None:
         super().__init__()
         self.block_size = block_size
 
         self.token_embedding = nn.Embedding(vocab_size, embed_size)
         self.position_embedding = nn.Embedding(self.block_size, embed_size)
 
-        self.attention_head = Head(embed_size, head_size=embed_size, block_size=block_size)
+        self.attention_heads = MultiHeadAttention(n_heads, embed_size // n_heads, embed_size, block_size)
+        # 4 8-dim self-attention heads -> final concat-ed head size = 32. 
 
         self.model_head = nn.Linear(embed_size, vocab_size)
         
@@ -26,7 +27,7 @@ class BigramModel(nn.Module):
         position_embeddings = self.position_embedding(torch.arange(T, device=HP.DEVICE))  # (T, embed_size).
         embeddings = token_embeddings + position_embeddings
 
-        z = self.attention_head(embeddings)  # (B, T, head_size).
+        z = self.attention_heads(embeddings)  # (B, T, head_size).
         logits = self.model_head(z)  # (B, T, vocab_size).
         
         loss = None
@@ -66,7 +67,6 @@ class Head(nn.Module):
 
         self.register_buffer("tril", torch.tril(torch.ones(block_size, block_size)))
 
-        self.block_size = block_size
         self.head_size = head_size
 
     def forward(self, inputs: torch.Tensor):
@@ -84,3 +84,17 @@ class Head(nn.Module):
         v = self.value(inputs)
         out = wei @ v
         return out
+
+
+class MultiHeadAttention(nn.Module):
+    """Multi-head attention."""
+
+    def __init__(self, n_heads: int, head_size: int, embed_size: int, block_size: int):
+        super().__init__()
+        self.heads = nn.ModuleList([
+            Head(embed_size, head_size, block_size)
+            for i in range(n_heads)
+        ])
+
+    def forward(self, inputs):
+        return torch.cat([h(inputs) for h in self.heads], dim=-1)  # concat over channel dim.
