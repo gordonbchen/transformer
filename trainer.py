@@ -4,7 +4,7 @@ import matplotlib.pyplot as plt
 from tqdm import tqdm
 from pathlib import Path
 
-from data import get_shakespeare_vocab_data, decode
+from data import get_shakespeare_vocab_data, decode, encode
 from models import BigramModel
 from hyperparams import HyperParms as HP
 
@@ -106,8 +106,8 @@ if __name__ == "__main__":
         eval_steps=100
     )
 
-    plot_loss(loss_steps, train_losses, val_losses, save_path=Path("loss_plots/bigram_positional_embeddings"))
+    plot_loss(loss_steps, train_losses, val_losses, save_path=Path("loss_plots/single_attention_head"))
 
-    input_prompt_tokens = torch.zeros((1, 1), dtype=torch.int64, device=HP.DEVICE)
+    input_prompt_tokens = torch.tensor(encode("Good morning", vocab), dtype=torch.int64, device=HP.DEVICE).unsqueeze(0)
     new_tokens = bigram_model.generate(input_prompt_tokens, n_tokens=500)
     print(decode(new_tokens[0].tolist(), vocab))
