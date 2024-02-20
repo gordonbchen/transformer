@@ -90,7 +90,7 @@ def plot_loss(loss_steps: list[int], train_losses: list[float], val_losses: list
 if __name__ == "__main__":
     vocab, train_data, val_data = get_shakespeare_vocab_data(val_split=0.1)
 
-    bigram_model = BigramModel(vocab_size=len(vocab), embed_size=32, block_size=8, n_heads=4)
+    bigram_model = BigramModel(vocab_size=len(vocab), embed_size=32, block_size=8, n_heads=4, n_blocks=4)
     bigram_model = bigram_model.to(HP.DEVICE)
 
     optimizer = torch.optim.Adam(bigram_model.parameters(), lr=1e-3)
@@ -106,7 +106,7 @@ if __name__ == "__main__":
         eval_steps=100
     )
 
-    plot_loss(loss_steps, train_losses, val_losses, save_path=Path("loss_plots/mha_ffwd"))
+    plot_loss(loss_steps, train_losses, val_losses, save_path=Path("loss_plots/multi_block_mha"))
 
     input_prompt_tokens = torch.tensor(encode("Good morning", vocab), dtype=torch.int64, device=HP.DEVICE).unsqueeze(0)
     new_tokens = bigram_model.generate(input_prompt_tokens, n_tokens=500)
