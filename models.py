@@ -97,9 +97,12 @@ class MultiHeadAttention(nn.Module):
             Head(embed_size, head_size, block_size)
             for i in range(n_heads)
         ])
+        self.linear = nn.Linear(embed_size, embed_size, bias=True)
 
     def forward(self, inputs: torch.Tensor) -> torch.Tensor:
-        return torch.cat([h(inputs) for h in self.heads], dim=-1)  # concat over channel dim.
+        z = torch.cat([h(inputs) for h in self.heads], dim=-1)  # concat over channel dim.
+        z = self.linear(z)
+        return z
 
 
 class FeedForward(nn.Module):
@@ -107,10 +110,14 @@ class FeedForward(nn.Module):
 
     def __init__(self, embed_size: int) -> None:
         super().__init__()
-        self.linear = nn.Linear(embed_size, embed_size, bias=True)
+        self.net = nn.Sequential(
+            nn.Linear(embed_size, embed_size * 4, bias=True),
+            nn.ReLU(),
+            nn.Linear(embed_size * 4, embed_size, bias=True)
+        )
 
     def forward(self, inputs: torch.Tensor) -> torch.Tensor:
-        return F.relu(self.linear(inputs))
+        return self.net(inputs)
     
 
 class AttentionBlock(nn.Module):
@@ -123,6 +130,6 @@ class AttentionBlock(nn.Module):
         self.ffwd = FeedForward(embed_size)
 
     def forward(self, inputs: torch.Tensor) -> torch.Tensor:
-        z = self.mha(inputs)
-        z = self.ffwd(z)
+        z = inputs + self.mha(inputs)
+        z = z + self.ffwd(z)
         return z

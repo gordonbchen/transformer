@@ -106,7 +106,7 @@ if __name__ == "__main__":
         eval_steps=100
     )
 
-    plot_loss(loss_steps, train_losses, val_losses, save_path=Path("loss_plots/multi_block_mha"))
+    plot_loss(loss_steps, train_losses, val_losses, save_path=Path("loss_plots/multi_block_mha_res"))
 
     input_prompt_tokens = torch.tensor(encode("Good morning", vocab), dtype=torch.int64, device=HP.DEVICE).unsqueeze(0)
     new_tokens = bigram_model.generate(input_prompt_tokens, n_tokens=500)
