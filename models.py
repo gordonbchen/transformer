@@ -16,7 +16,9 @@ class BigramModel(nn.Module):
         self.position_embedding = nn.Embedding(self.block_size, embed_size)
 
         self.attention_heads = MultiHeadAttention(n_heads, embed_size // n_heads, embed_size, block_size)
-        # 4 8-dim self-attention heads -> final concat-ed head size = 32. 
+        # 4 8-dim self-attention heads -> final concat-ed head size = 32.
+
+        self.feed_forward = FeedForward(embed_size)
 
         self.model_head = nn.Linear(embed_size, vocab_size)
         
@@ -28,6 +30,7 @@ class BigramModel(nn.Module):
         embeddings = token_embeddings + position_embeddings
 
         z = self.attention_heads(embeddings)  # (B, T, head_size).
+        z = self.feed_forward(z)
         logits = self.model_head(z)  # (B, T, vocab_size).
         
         loss = None
@@ -69,7 +72,7 @@ class Head(nn.Module):
 
         self.head_size = head_size
 
-    def forward(self, inputs: torch.Tensor):
+    def forward(self, inputs: torch.Tensor) -> torch.Tensor:
         # Calculate keys and queries from token embeddings.
         k = self.key(inputs)
         q = self.query(inputs)
@@ -89,12 +92,23 @@ class Head(nn.Module):
 class MultiHeadAttention(nn.Module):
     """Multi-head attention."""
 
-    def __init__(self, n_heads: int, head_size: int, embed_size: int, block_size: int):
+    def __init__(self, n_heads: int, head_size: int, embed_size: int, block_size: int) -> None:
         super().__init__()
         self.heads = nn.ModuleList([
             Head(embed_size, head_size, block_size)
             for i in range(n_heads)
         ])
 
-    def forward(self, inputs):
+    def forward(self, inputs: torch.Tensor) -> torch.Tensor:
         return torch.cat([h(inputs) for h in self.heads], dim=-1)  # concat over channel dim.
+
+
+class FeedForward(nn.Module):
+    """A simple MLP feed-forward module."""
+
+    def __init__(self, embed_size: int) -> None:
+        super().__init__()
+        self.linear = nn.Linear(embed_size, embed_size, bias=True)
+
+    def forward(self, inputs: torch.Tensor) -> torch.Tensor:
+        return F.relu(self.linear(inputs))
