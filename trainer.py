@@ -9,18 +9,18 @@ from models import BigramModel
 from hyperparams import HyperParms as HP
 
 
-def get_batch(data: torch.Tensor, batch_size: int) -> torch.Tensor:
+def get_batch(data: torch.Tensor, block_size: int, batch_size: int) -> torch.Tensor:
     """Get random batch."""
-    inds = torch.randint(len(data)-HP.BLOCK_SIZE-1, size=(batch_size,))
+    inds = torch.randint(len(data)-block_size-1, size=(batch_size,))
 
-    xb = torch.stack([data[i : i+HP.BLOCK_SIZE] for i in inds])
-    yb = torch.stack([data[i+1 : i+HP.BLOCK_SIZE+1] for i in inds])
+    xb = torch.stack([data[i : i+block_size] for i in inds])
+    yb = torch.stack([data[i+1 : i+block_size+1] for i in inds])
     return xb, yb
 
 
 def calc_batch_loss(model: torch.nn.Module, data: torch.Tensor, batch_size: int) -> torch.Tensor:
     """Calculate model loss on a data batch."""
-    xb, yb = get_batch(data, batch_size)
+    xb, yb = get_batch(data, model.block_size, batch_size)
     xb, yb = xb.to(HP.DEVICE), yb.to(HP.DEVICE)
     
     logits, loss = model(xb, targets=yb)
@@ -90,12 +90,14 @@ def plot_loss(loss_steps: list[int], train_losses: list[float], val_losses: list
 if __name__ == "__main__":
     vocab, train_data, val_data = get_shakespeare_vocab_data(val_split=0.1)
 
-    bigram_model = BigramModel(vocab_size=len(vocab), embed_size=32)
+    bigram_model = BigramModel(vocab_size=len(vocab), embed_size=32, block_size=8)
     bigram_model = bigram_model.to(HP.DEVICE)
+
+    optimizer = torch.optim.Adam(bigram_model.parameters(), lr=1e-3)
 
     loss_steps, train_losses, val_losses = train_model(
         bigram_model,
-        optimizer=torch.optim.Adam(bigram_model.parameters(), lr=1e-3),
+        optimizer=optimizer,
         train_data=train_data,
         val_data=val_data,
         batch_size=32,
