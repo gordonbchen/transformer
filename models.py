@@ -20,6 +20,8 @@ class BigramModel(nn.Module):
             for i in range(n_blocks)
         ))
 
+        self.layer_norm = torch.nn.LayerNorm(embed_size)
+
         self.model_head = nn.Linear(embed_size, vocab_size)
         
     def forward(self, inputs: torch.Tensor, targets: torch.Tensor = None) -> tuple[torch.Tensor, None|torch.Tensor]:
@@ -30,6 +32,7 @@ class BigramModel(nn.Module):
         embeddings = token_embeddings + position_embeddings
 
         z = self.attention_blocks(embeddings)
+        z = self.layer_norm(z)
         logits = self.model_head(z)  # (B, T, vocab_size).
         
         loss = None
@@ -129,7 +132,13 @@ class AttentionBlock(nn.Module):
         self.mha = MultiHeadAttention(n_heads, head_size, embed_size, block_size)
         self.ffwd = FeedForward(embed_size)
 
+        self.layer_norm1 = nn.LayerNorm(embed_size)
+        self.layer_norm2 = nn.LayerNorm(embed_size)
+
     def forward(self, inputs: torch.Tensor) -> torch.Tensor:
-        z = inputs + self.mha(inputs)
+        z = self.layer_norm1(inputs)
+        z = z + self.mha(z)
+
+        z = self.layer_norm2(z)
         z = z + self.ffwd(z)
         return z
