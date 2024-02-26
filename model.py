@@ -5,8 +5,8 @@ from torch.nn import functional as F
 from hyperparams import HyperParms as HP
 
 
-class BigramModel(nn.Module):
-    """Bigram language model."""
+class Transformer(nn.Module):
+    """Transformer language model."""
 
     def __init__(self, vocab_size: int, embed_size: int, block_size: int, n_heads: int, n_blocks: int) -> None:
         super().__init__()
@@ -61,6 +61,44 @@ class BigramModel(nn.Module):
         return tokens
 
 
+class AttentionBlock(nn.Module):
+    """A multi-head attention block."""
+
+    def __init__(self, n_heads: int, embed_size: int, block_size: int) -> None:
+        super().__init__()
+        head_size = embed_size // n_heads
+        self.mha = MultiHeadAttention(n_heads, head_size, embed_size, block_size)
+        self.ffwd = FeedForward(embed_size)
+
+        self.layer_norm1 = nn.LayerNorm(embed_size)
+        self.layer_norm2 = nn.LayerNorm(embed_size)
+
+    def forward(self, inputs: torch.Tensor) -> torch.Tensor:
+        z = self.layer_norm1(inputs)
+        z = z + self.mha(z)
+
+        z = self.layer_norm2(z)
+        z = z + self.ffwd(z)
+        return z
+
+
+class MultiHeadAttention(nn.Module):
+    """Multi-head attention."""
+
+    def __init__(self, n_heads: int, head_size: int, embed_size: int, block_size: int) -> None:
+        super().__init__()
+        self.heads = nn.ModuleList([
+            Head(embed_size, head_size, block_size)
+            for i in range(n_heads)
+        ])
+        self.linear = nn.Linear(embed_size, embed_size, bias=True)
+
+    def forward(self, inputs: torch.Tensor) -> torch.Tensor:
+        z = torch.cat([h(inputs) for h in self.heads], dim=-1)  # concat over channel dim.
+        z = self.linear(z)
+        return z
+
+
 class Head(nn.Module):
     """A single self-attention head."""
     
@@ -90,24 +128,6 @@ class Head(nn.Module):
         out = wei @ v
         return out
 
-
-class MultiHeadAttention(nn.Module):
-    """Multi-head attention."""
-
-    def __init__(self, n_heads: int, head_size: int, embed_size: int, block_size: int) -> None:
-        super().__init__()
-        self.heads = nn.ModuleList([
-            Head(embed_size, head_size, block_size)
-            for i in range(n_heads)
-        ])
-        self.linear = nn.Linear(embed_size, embed_size, bias=True)
-
-    def forward(self, inputs: torch.Tensor) -> torch.Tensor:
-        z = torch.cat([h(inputs) for h in self.heads], dim=-1)  # concat over channel dim.
-        z = self.linear(z)
-        return z
-
-
 class FeedForward(nn.Module):
     """A simple MLP feed-forward module."""
 
@@ -121,24 +141,3 @@ class FeedForward(nn.Module):
 
     def forward(self, inputs: torch.Tensor) -> torch.Tensor:
         return self.net(inputs)
-    
-
-class AttentionBlock(nn.Module):
-    """A multi-head attention block."""
-
-    def __init__(self, n_heads: int, embed_size: int, block_size: int) -> None:
-        super().__init__()
-        head_size = embed_size // n_heads
-        self.mha = MultiHeadAttention(n_heads, head_size, embed_size, block_size)
-        self.ffwd = FeedForward(embed_size)
-
-        self.layer_norm1 = nn.LayerNorm(embed_size)
-        self.layer_norm2 = nn.LayerNorm(embed_size)
-
-    def forward(self, inputs: torch.Tensor) -> torch.Tensor:
-        z = self.layer_norm1(inputs)
-        z = z + self.mha(z)
-
-        z = self.layer_norm2(z)
-        z = z + self.ffwd(z)
-        return z

@@ -5,7 +5,7 @@ from tqdm import tqdm
 from pathlib import Path
 
 from data import get_shakespeare_vocab_data, decode, encode
-from models import BigramModel
+from model import Transformer
 from hyperparams import HyperParms as HP
 
 
@@ -90,7 +90,7 @@ def plot_loss(loss_steps: list[int], train_losses: list[float], val_losses: list
 if __name__ == "__main__":
     vocab, train_data, val_data = get_shakespeare_vocab_data(val_split=0.1)
 
-    bigram_model = BigramModel(vocab_size=len(vocab), embed_size=32, block_size=8, n_heads=4, n_blocks=4)
+    bigram_model = Transformer(vocab_size=len(vocab), embed_size=32, block_size=8, n_heads=4, n_blocks=4)
     bigram_model = bigram_model.to(HP.DEVICE)
 
     optimizer = torch.optim.Adam(bigram_model.parameters(), lr=1e-3)
