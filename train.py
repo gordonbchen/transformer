@@ -90,24 +90,29 @@ def plot_loss(loss_steps: list[int], train_losses: list[float], val_losses: list
 if __name__ == "__main__":
     vocab, train_data, val_data = get_shakespeare_vocab_data(val_split=0.1)
 
-    bigram_model = Transformer(vocab_size=len(vocab), embed_size=32, block_size=8, n_heads=4, n_blocks=4)
-    bigram_model = bigram_model.to(HP.DEVICE)
+    transformer = Transformer(vocab_size=len(vocab), embed_size=256, block_size=256, n_heads=8, n_blocks=6, dropout=0.2)
+    transformer = transformer.to(HP.DEVICE)
 
-    optimizer = torch.optim.Adam(bigram_model.parameters(), lr=1e-3)
+    optimizer = torch.optim.Adam(transformer.parameters(), lr=3e-4)
 
     loss_steps, train_losses, val_losses = train_model(
-        bigram_model,
+        transformer,
         optimizer=optimizer,
         train_data=train_data,
         val_data=val_data,
-        batch_size=32,
-        steps=10_000,
-        eval_step_size=250,
+        batch_size=64,
+        steps=5_000,
+        eval_step_size=1_000,
         eval_steps=100
     )
 
-    plot_loss(loss_steps, train_losses, val_losses, save_path=Path("loss_plots/transformer_layer_norm"))
+    plot_loss(loss_steps, train_losses, val_losses, save_path=Path("loss_plots/transformer_dropout_scale"))
 
-    input_prompt_tokens = torch.tensor(encode("Good morning", vocab), dtype=torch.int64, device=HP.DEVICE).unsqueeze(0)
-    new_tokens = bigram_model.generate(input_prompt_tokens, n_tokens=500)
+    transformer.eval()
+    input_prompt_tokens = torch.tensor(encode("To be or", vocab), dtype=torch.int64, device=HP.DEVICE).unsqueeze(0)
+    new_tokens = transformer.generate(input_prompt_tokens, n_tokens=500)
     print(decode(new_tokens[0].tolist(), vocab))
+
+    weights_path = Path("weights")
+    weights_path.mkdir(exist_ok=True)
+    torch.save(transformer.state_dict(), weights_path / "transformer.pth")

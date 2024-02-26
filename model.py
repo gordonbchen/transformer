@@ -8,7 +8,7 @@ from hyperparams import HyperParms as HP
 class Transformer(nn.Module):
     """Transformer language model."""
 
-    def __init__(self, vocab_size: int, embed_size: int, block_size: int, n_heads: int, n_blocks: int) -> None:
+    def __init__(self, vocab_size: int, embed_size: int, block_size: int, n_heads: int, n_blocks: int, dropout: float) -> None:
         super().__init__()
         self.block_size = block_size
 
@@ -16,11 +16,11 @@ class Transformer(nn.Module):
         self.position_embedding = nn.Embedding(self.block_size, embed_size)
 
         self.attention_blocks = nn.Sequential(*(
-            AttentionBlock(n_heads, embed_size, block_size)
+            AttentionBlock(n_heads, embed_size, block_size, dropout)
             for i in range(n_blocks)
         ))
 
-        self.layer_norm = torch.nn.LayerNorm(embed_size)
+        self.layer_norm = nn.LayerNorm(embed_size)
 
         self.model_head = nn.Linear(embed_size, vocab_size)
         
@@ -64,11 +64,11 @@ class Transformer(nn.Module):
 class AttentionBlock(nn.Module):
     """A multi-head attention block."""
 
-    def __init__(self, n_heads: int, embed_size: int, block_size: int) -> None:
+    def __init__(self, n_heads: int, embed_size: int, block_size: int, dropout: float) -> None:
         super().__init__()
         head_size = embed_size // n_heads
-        self.mha = MultiHeadAttention(n_heads, head_size, embed_size, block_size)
-        self.ffwd = FeedForward(embed_size)
+        self.mha = MultiHeadAttention(n_heads, head_size, embed_size, block_size, dropout)
+        self.ffwd = FeedForward(embed_size, dropout)
 
         self.layer_norm1 = nn.LayerNorm(embed_size)
         self.layer_norm2 = nn.LayerNorm(embed_size)
@@ -85,30 +85,34 @@ class AttentionBlock(nn.Module):
 class MultiHeadAttention(nn.Module):
     """Multi-head attention."""
 
-    def __init__(self, n_heads: int, head_size: int, embed_size: int, block_size: int) -> None:
+    def __init__(self, n_heads: int, head_size: int, embed_size: int, block_size: int, dropout: float) -> None:
         super().__init__()
         self.heads = nn.ModuleList([
-            Head(embed_size, head_size, block_size)
+            Head(embed_size, head_size, block_size, dropout)
             for i in range(n_heads)
         ])
         self.linear = nn.Linear(embed_size, embed_size, bias=True)
+        self.dropout = nn.Dropout(dropout)
 
     def forward(self, inputs: torch.Tensor) -> torch.Tensor:
         z = torch.cat([h(inputs) for h in self.heads], dim=-1)  # concat over channel dim.
         z = self.linear(z)
+        z = self.dropout(z)
         return z
 
 
 class Head(nn.Module):
     """A single self-attention head."""
     
-    def __init__(self, embed_size: int, head_size: int, block_size: int) -> None:
+    def __init__(self, embed_size: int, head_size: int, block_size: int, dropout: float) -> None:
         super().__init__()
         self.key = nn.Linear(embed_size, head_size, bias=False)
         self.query = nn.Linear(embed_size, head_size, bias=False)
         self.value = nn.Linear(embed_size, head_size, bias=False)
 
         self.register_buffer("tril", torch.tril(torch.ones(block_size, block_size)))
+
+        self.dropout = nn.Dropout(dropout)
 
         self.head_size = head_size
 
@@ -120,8 +124,13 @@ class Head(nn.Module):
         # Calculate affinities from k and q.
         wei = k @ q.transpose(-2, -1)
         wei = wei * (self.head_size ** -0.5)  # scale by 1/sqrt(head_size).
-        wei = wei.masked_fill(self.tril == 0, float("-inf"))  # mask future.
+
+        T = wei.shape[-1]
+        wei = wei.masked_fill((self.tril == 0)[:T, :T], float("-inf"))  # mask future.
+        
         wei = F.softmax(wei, dim=-1)  # softmax smoothing.
+
+        wei = self.dropout(wei)
 
         # Take weighted mean of values.
         v = self.value(inputs)
@@ -131,12 +140,13 @@ class Head(nn.Module):
 class FeedForward(nn.Module):
     """A simple MLP feed-forward module."""
 
-    def __init__(self, embed_size: int) -> None:
+    def __init__(self, embed_size: int, dropout: float) -> None:
         super().__init__()
         self.net = nn.Sequential(
             nn.Linear(embed_size, embed_size * 4, bias=True),
             nn.ReLU(),
-            nn.Linear(embed_size * 4, embed_size, bias=True)
+            nn.Linear(embed_size * 4, embed_size, bias=True),
+            nn.Dropout(dropout)
         )
 
     def forward(self, inputs: torch.Tensor) -> torch.Tensor:
