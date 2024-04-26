@@ -66,8 +66,7 @@ class AttentionBlock(nn.Module):
 
     def __init__(self, n_heads: int, embed_size: int, block_size: int, dropout: float) -> None:
         super().__init__()
-        head_size = embed_size // n_heads
-        self.mha = MultiHeadAttention(n_heads, head_size, embed_size, block_size, dropout)
+        self.mha = MultiHeadAttention(n_heads, embed_size, block_size, dropout)
         self.ffwd = FeedForward(embed_size, dropout)
 
         self.layer_norm1 = nn.LayerNorm(embed_size)
@@ -85,58 +84,61 @@ class AttentionBlock(nn.Module):
 class MultiHeadAttention(nn.Module):
     """Multi-head attention."""
 
-    def __init__(self, n_heads: int, head_size: int, embed_size: int, block_size: int, dropout: float) -> None:
+    def __init__(self, n_heads: int, embed_size: int, block_size: int, dropout: float) -> None:
         super().__init__()
-        self.heads = nn.ModuleList([
-            Head(embed_size, head_size, block_size, dropout)
-            for i in range(n_heads)
-        ])
-        self.linear = nn.Linear(embed_size, embed_size, bias=True)
-        self.dropout = nn.Dropout(dropout)
+        
+        assert embed_size % n_heads == 0, f"embed_size {embed_size} must be divisible by n_heads {n_heads}."
+        self.head_size = embed_size // n_heads
 
-    def forward(self, inputs: torch.Tensor) -> torch.Tensor:
-        z = torch.cat([h(inputs) for h in self.heads], dim=-1)  # concat over channel dim.
-        z = self.linear(z)
-        z = self.dropout(z)
-        return z
+        self.n_heads = n_heads
 
-
-class Head(nn.Module):
-    """A single self-attention head."""
-    
-    def __init__(self, embed_size: int, head_size: int, block_size: int, dropout: float) -> None:
-        super().__init__()
-        self.key = nn.Linear(embed_size, head_size, bias=False)
-        self.query = nn.Linear(embed_size, head_size, bias=False)
-        self.value = nn.Linear(embed_size, head_size, bias=False)
+        self.k_net = nn.Linear(embed_size, embed_size, bias=False)
+        self.q_net = nn.Linear(embed_size, embed_size, bias=False)
+        self.v_net = nn.Linear(embed_size, embed_size, bias=False)
 
         self.register_buffer("tril", torch.tril(torch.ones(block_size, block_size)))
 
-        self.dropout = nn.Dropout(dropout)
+        self.wei_dropout = nn.Dropout(dropout)
 
-        self.head_size = head_size
+        self.linear = nn.Linear(embed_size, embed_size, bias=True)
+        self.output_dropout = nn.Dropout(dropout)
 
     def forward(self, inputs: torch.Tensor) -> torch.Tensor:
-        # Calculate keys and queries from token embeddings.
-        k = self.key(inputs)
-        q = self.query(inputs)
+        K = self.k_net(inputs)
+        Q = self.q_net(inputs)
+        V = self.v_net(inputs)
 
-        # Calculate affinities from k and q.
-        wei = k @ q.transpose(-2, -1)
-        wei = wei * (self.head_size ** -0.5)  # scale by 1/sqrt(head_size).
-
-        T = wei.shape[-1]
-        wei = wei.masked_fill((self.tril == 0)[:T, :T], float("-inf"))  # mask future.
+        K, Q, V = (self.split_heads(x) for x in (K, Q, V))
         
-        wei = F.softmax(wei, dim=-1)  # softmax smoothing.
+        z = self.scaled_dot_product_attention(K, Q, V)
 
-        wei = self.dropout(wei)
+        z = self.combine_heads(z)
 
-        # Take weighted mean of values.
-        v = self.value(inputs)
-        out = wei @ v
+        z = self.linear(z)
+        z = self.output_dropout(z)
+        return z
+    
+    def scaled_dot_product_attention(self, K, Q, V):
+        wei = (K @ Q.transpose(-2, -1))  # Calculate affinities.
+        wei = wei * (self.head_size ** -0.5)  # Scale by 1/sqrt(head_size).
+        
+        T = wei.shape[-1]  # Only mask to time length (for short seqence generation).
+        wei = wei.masked_fill((self.tril == 0)[:T, :T], float("-inf"))  # Mask future.
+
+        wei = F.softmax(wei, dim=-1)  # Softmax smoothing.
+        wei = self.wei_dropout(wei)
+
+        out = wei @ V  # Take weighted mean of values.
         return out
 
+    def split_heads(self, x: torch.Tensor) -> torch.Tensor:
+        B, T, C = x.shape
+        return x.view(B, T, self.n_heads, self.head_size).transpose(1, 2)
+    
+    def combine_heads(self, x: torch.Tensor) -> torch.Tensor:
+        B, n_heads, T, head_size = x.shape
+        return x.transpose(1, 2).contiguous().view(B, T, int(n_heads * head_size))
+    
 
 class FeedForward(nn.Module):
     """A simple MLP feed-forward module."""
