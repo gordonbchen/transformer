@@ -137,6 +137,7 @@ class Head(nn.Module):
         out = wei @ v
         return out
 
+
 class FeedForward(nn.Module):
     """A simple MLP feed-forward module."""
 
