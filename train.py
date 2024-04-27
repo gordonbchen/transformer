@@ -106,7 +106,7 @@ if __name__ == "__main__":
         eval_steps=100
     )
 
-    plot_loss(loss_steps, train_losses, val_losses, save_path=Path("loss_plots/transformer_mha_refactor"))
+    plot_loss(loss_steps, train_losses, val_losses, save_path=Path("loss_plots/sin_pos_embedding"))
 
     transformer.eval()
     input_prompt_tokens = torch.tensor(encode("To be or", vocab), dtype=torch.int64, device=HP.DEVICE).unsqueeze(0)

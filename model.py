@@ -13,7 +13,7 @@ class Transformer(nn.Module):
         self.block_size = block_size
 
         self.token_embedding = nn.Embedding(vocab_size, embed_size)
-        self.position_embedding = nn.Embedding(self.block_size, embed_size)
+        self.position_embedding = SinPositionalEncoding(block_size, embed_size)
 
         self.attention_blocks = nn.Sequential(*(
             AttentionBlock(n_heads, embed_size, block_size, dropout)
@@ -28,8 +28,7 @@ class Transformer(nn.Module):
         B, T = inputs.shape  # inputs and targets are (B, T).
 
         token_embeddings = self.token_embedding(inputs)  # (B, T, embed_size).
-        position_embeddings = self.position_embedding(torch.arange(T, device=HP.DEVICE))  # (T, embed_size).
-        embeddings = token_embeddings + position_embeddings
+        embeddings = self.position_embedding(token_embeddings)  # Add positional embeddings.
 
         z = self.attention_blocks(embeddings)
         z = self.layer_norm(z)
@@ -154,3 +153,24 @@ class FeedForward(nn.Module):
 
     def forward(self, inputs: torch.Tensor) -> torch.Tensor:
         return self.net(inputs)
+
+
+class SinPositionalEncoding(nn.Module):
+    """Sinusoidal positional encoding."""
+
+    def __init__(self, max_seq_length: int, embed_size: int) -> None:
+        super().__init__()
+
+        pos_encoding = torch.zeros(max_seq_length, embed_size, dtype=torch.float32)
+
+        pos_arange = torch.arange(max_seq_length, dtype=torch.float32).unsqueeze(1)
+        dim_arange = torch.arange(embed_size // 2, dtype=torch.float32)
+
+        div_factor = 10_000 ** ((2 * dim_arange) / embed_size)
+        pos_encoding[:, ::2] = torch.sin(pos_arange / div_factor)
+        pos_encoding[:, 1::2] = torch.cos(pos_arange / div_factor)
+
+        self.register_buffer("pos_encoding", pos_encoding.unsqueeze(0))
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        return x + self.pos_encoding[:, :x.shape[-2]]
