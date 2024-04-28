@@ -7,7 +7,7 @@ from pathlib import Path
 def get_shakespeare_text() -> str:
     """Download and return shakespeare text."""
     shakespeare_path = Path("data/shakespeare.txt")
-    
+
     if not shakespeare_path.exists():
         url = "https://raw.githubusercontent.com/karpathy/char-rnn/master/data/tinyshakespeare/input.txt"
         text_bytes = requests.get(url).content
@@ -17,7 +17,7 @@ def get_shakespeare_text() -> str:
 
         with open(shakespeare_path, mode="wb") as f:
             f.write(text_bytes)
-    
+
     with open(shakespeare_path, mode="r") as f:
         text = f.read()
     return text
@@ -37,7 +37,9 @@ def decode(ints: list[int], vocab: list[str]) -> str:
     return string
 
 
-def get_shakespeare_vocab_data(val_split: float) -> tuple[list[str], torch.Tensor, torch.Tensor]:
+def get_shakespeare_vocab_data(
+    val_split: float,
+) -> tuple[list[str], torch.Tensor, torch.Tensor]:
     """Get encoded shakespeare data. Return vocab, train data, and val data."""
     text = get_shakespeare_text()
     vocab = sorted(list(set(text)))
@@ -47,7 +49,9 @@ def get_shakespeare_vocab_data(val_split: float) -> tuple[list[str], torch.Tenso
     return vocab, train_data, val_data
 
 
-def train_val_split(data: torch.Tensor, val_split: float) -> tuple[torch.Tensor, torch.Tensor]:
+def train_val_split(
+    data: torch.Tensor, val_split: float
+) -> tuple[torch.Tensor, torch.Tensor]:
     """Split data into train and val."""
     n_val_samples = int(len(data) * val_split)
 

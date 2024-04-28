@@ -1,7 +1,8 @@
 import torch
 
 
-class HyperParms():
+class HyperParms:
     """Stores hyperparams."""
+
     DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
     print(f"Using device: {DEVICE}")

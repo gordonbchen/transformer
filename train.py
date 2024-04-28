@@ -11,24 +11,28 @@ from hyperparams import HyperParms as HP
 
 def get_batch(data: torch.Tensor, block_size: int, batch_size: int) -> torch.Tensor:
     """Get random batch."""
-    inds = torch.randint(len(data)-block_size-1, size=(batch_size,))
+    inds = torch.randint(len(data) - block_size - 1, size=(batch_size,))
 
-    xb = torch.stack([data[i : i+block_size] for i in inds])
-    yb = torch.stack([data[i+1 : i+block_size+1] for i in inds])
+    xb = torch.stack([data[i : i + block_size] for i in inds])
+    yb = torch.stack([data[i + 1 : i + block_size + 1] for i in inds])
     return xb, yb
 
 
-def calc_batch_loss(model: torch.nn.Module, data: torch.Tensor, batch_size: int) -> torch.Tensor:
+def calc_batch_loss(
+    model: torch.nn.Module, data: torch.Tensor, batch_size: int
+) -> torch.Tensor:
     """Calculate model loss on a data batch."""
     xb, yb = get_batch(data, model.block_size, batch_size)
     xb, yb = xb.to(HP.DEVICE), yb.to(HP.DEVICE)
-    
+
     logits, loss = model(xb, targets=yb)
     return loss
 
 
 @torch.no_grad()
-def eval_model(model: torch.nn.Module, data: torch.Tensor, batch_size: int, eval_steps: int):
+def eval_model(
+    model: torch.nn.Module, data: torch.Tensor, batch_size: int, eval_steps: int
+):
     """Evaluate model loss across many steps."""
     model.eval()
 
@@ -48,7 +52,7 @@ def train_model(
     batch_size: int,
     steps: int,
     eval_step_size: int,
-    eval_steps: int
+    eval_steps: int,
 ) -> tuple[list[float], list[float]]:
     """Train a model. Return step number, train and val losses."""
     loss_steps = []
@@ -57,14 +61,14 @@ def train_model(
     for step in tqdm(range(steps)):
         model.train()
         loss = calc_batch_loss(model, train_data, batch_size)
-        
+
         optimizer.zero_grad(set_to_none=True)
         loss.backward()
         optimizer.step()
 
         if (step % eval_step_size == 0) or (step == steps - 1):
             train_loss = eval_model(model, train_data, batch_size, eval_steps)
-            val_loss = eval_model(model, val_data, batch_size, eval_steps) 
+            val_loss = eval_model(model, val_data, batch_size, eval_steps)
 
             loss_steps.append(step)
             train_losses.append(train_loss)
@@ -73,7 +77,12 @@ def train_model(
     return loss_steps, train_losses, val_losses
 
 
-def plot_loss(loss_steps: list[int], train_losses: list[float], val_losses: list[float], save_path: Path) -> None:
+def plot_loss(
+    loss_steps: list[int],
+    train_losses: list[float],
+    val_losses: list[float],
+    save_path: Path,
+) -> None:
     """Plot train and val loss."""
     fig, ax = plt.subplots(figsize=(12, 6))
 
@@ -97,7 +106,7 @@ if __name__ == "__main__":
         block_size=256,
         n_heads=8,
         n_layers=6,
-        dropout=0.2
+        dropout=0.2,
     )
     transformer = transformer.to(HP.DEVICE)
 
@@ -111,13 +120,20 @@ if __name__ == "__main__":
         batch_size=64,
         steps=5_000,
         eval_step_size=1_000,
-        eval_steps=100
+        eval_steps=100,
     )
 
-    plot_loss(loss_steps, train_losses, val_losses, save_path=Path("loss_plots/sin_pos_embedding"))
+    plot_loss(
+        loss_steps,
+        train_losses,
+        val_losses,
+        save_path=Path("loss_plots/sin_pos_embedding"),
+    )
 
     transformer.eval()
-    input_prompt_tokens = torch.tensor(encode("To be or", vocab), dtype=torch.int64, device=HP.DEVICE).unsqueeze(0)
+    input_prompt_tokens = torch.tensor(
+        encode("To be or", vocab), dtype=torch.int64, device=HP.DEVICE
+    ).unsqueeze(0)
     new_tokens = transformer.generate(input_prompt_tokens, n_tokens=500)
     print(decode(new_tokens[0].tolist(), vocab))
 
