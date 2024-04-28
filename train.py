@@ -90,7 +90,15 @@ def plot_loss(loss_steps: list[int], train_losses: list[float], val_losses: list
 if __name__ == "__main__":
     vocab, train_data, val_data = get_shakespeare_vocab_data(val_split=0.1)
 
-    transformer = Transformer(vocab_size=len(vocab), embed_size=256, block_size=256, n_heads=8, n_blocks=6, dropout=0.2)
+    transformer = Transformer(
+        vocab_size=len(vocab),
+        d_model=256,
+        d_ffwd=1024,
+        block_size=256,
+        n_heads=8,
+        n_layers=6,
+        dropout=0.2
+    )
     transformer = transformer.to(HP.DEVICE)
 
     optimizer = torch.optim.Adam(transformer.parameters(), lr=3e-4)

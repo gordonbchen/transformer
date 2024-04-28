@@ -2,27 +2,35 @@ import torch
 import torch.nn as nn
 from torch.nn import functional as F
 
-from hyperparams import HyperParms as HP
-
 
 class Transformer(nn.Module):
     """Transformer language model."""
 
-    def __init__(self, vocab_size: int, embed_size: int, block_size: int, n_heads: int, n_blocks: int, dropout: float) -> None:
+    def __init__(
+        self,
+        vocab_size: int,
+        d_model: int,
+        d_ffwd: int,
+        block_size: int,
+        n_heads: int,
+        n_layers: int,
+        dropout: float
+    ) -> None:
         super().__init__()
+        
         self.block_size = block_size
 
-        self.token_embedding = nn.Embedding(vocab_size, embed_size)
-        self.position_embedding = SinPositionalEncoding(block_size, embed_size)
+        self.token_embedding = nn.Embedding(vocab_size, d_model)
+        self.position_embedding = SinPositionalEncoding(block_size, d_model)
 
         self.attention_blocks = nn.Sequential(*(
-            AttentionBlock(n_heads, embed_size, block_size, dropout)
-            for i in range(n_blocks)
+            AttentionBlock(n_heads, d_model, d_ffwd, block_size, dropout)
+            for i in range(n_layers)
         ))
 
-        self.layer_norm = nn.LayerNorm(embed_size)
+        self.layer_norm = nn.LayerNorm(d_model)
 
-        self.model_head = nn.Linear(embed_size, vocab_size)
+        self.model_head = nn.Linear(d_model, vocab_size)
         
     def forward(self, inputs: torch.Tensor, targets: torch.Tensor = None) -> tuple[torch.Tensor, None|torch.Tensor]:
         B, T = inputs.shape  # inputs and targets are (B, T).
@@ -63,16 +71,16 @@ class Transformer(nn.Module):
 class AttentionBlock(nn.Module):
     """A multi-head attention block."""
 
-    def __init__(self, n_heads: int, embed_size: int, block_size: int, dropout: float) -> None:
+    def __init__(self, n_heads: int, d_model: int, d_ffwd: int, block_size: int, dropout: float) -> None:
         super().__init__()
-        self.mha = MultiHeadAttention(n_heads, embed_size, block_size, dropout)
-        self.ffwd = FeedForward(embed_size, dropout)
+        self.mha = MultiHeadAttention(n_heads, d_model, block_size, dropout)
+        self.ffwd = FeedForward(d_model, d_ffwd, dropout)
 
-        self.layer_norm1 = nn.LayerNorm(embed_size)
-        self.layer_norm2 = nn.LayerNorm(embed_size)
+        self.layer_norm1 = nn.LayerNorm(d_model)
+        self.layer_norm2 = nn.LayerNorm(d_model)
 
-    def forward(self, inputs: torch.Tensor) -> torch.Tensor:
-        z = self.layer_norm1(inputs)
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        z = self.layer_norm1(x)
         z = z + self.mha(z)
 
         z = self.layer_norm2(z)
@@ -83,31 +91,31 @@ class AttentionBlock(nn.Module):
 class MultiHeadAttention(nn.Module):
     """Multi-head attention."""
 
-    def __init__(self, n_heads: int, embed_size: int, block_size: int, dropout: float) -> None:
+    def __init__(self, n_heads: int, d_model: int, block_size: int, dropout: float) -> None:
         super().__init__()
         
-        assert embed_size % n_heads == 0, f"embed_size {embed_size} must be divisible by n_heads {n_heads}."
-        self.head_size = embed_size // n_heads
+        assert d_model % n_heads == 0, f"d_model {d_model} must be divisible by n_heads {n_heads}."
+        self.head_size = d_model // n_heads
 
         self.n_heads = n_heads
 
-        self.k_net = nn.Linear(embed_size, embed_size, bias=False)
-        self.q_net = nn.Linear(embed_size, embed_size, bias=False)
-        self.v_net = nn.Linear(embed_size, embed_size, bias=False)
+        self.k_net = nn.Linear(d_model, d_model, bias=False)
+        self.q_net = nn.Linear(d_model, d_model, bias=False)
+        self.v_net = nn.Linear(d_model, d_model, bias=False)
 
         self.register_buffer("tril", torch.tril(torch.ones(block_size, block_size)))
 
         self.wei_dropout = nn.Dropout(dropout)
 
-        self.linear = nn.Linear(embed_size, embed_size, bias=True)
+        self.linear = nn.Linear(d_model, d_model, bias=True)
         self.output_dropout = nn.Dropout(dropout)
 
-    def forward(self, inputs: torch.Tensor) -> torch.Tensor:
-        K = self.k_net(inputs)
-        Q = self.q_net(inputs)
-        V = self.v_net(inputs)
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        K = self.k_net(x)
+        Q = self.q_net(x)
+        V = self.v_net(x)
 
-        K, Q, V = (self.split_heads(x) for x in (K, Q, V))
+        K, Q, V = (self.split_heads(i) for i in (K, Q, V))
         
         z = self.scaled_dot_product_attention(K, Q, V)
 
@@ -142,28 +150,28 @@ class MultiHeadAttention(nn.Module):
 class FeedForward(nn.Module):
     """A simple MLP feed-forward module."""
 
-    def __init__(self, embed_size: int, dropout: float) -> None:
+    def __init__(self, d_model: int, d_ffwd: int, dropout: float) -> None:
         super().__init__()
         self.net = nn.Sequential(
-            nn.Linear(embed_size, embed_size * 4, bias=True),
+            nn.Linear(d_model, d_ffwd, bias=True),
             nn.ReLU(),
-            nn.Linear(embed_size * 4, embed_size, bias=True),
+            nn.Linear(d_ffwd, d_model, bias=True),
             nn.Dropout(dropout)
         )
 
-    def forward(self, inputs: torch.Tensor) -> torch.Tensor:
-        return self.net(inputs)
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        return self.net(x)
 
 
 class SinPositionalEncoding(nn.Module):
     """Sinusoidal positional encoding."""
 
-    def __init__(self, max_seq_length: int, embed_size: int) -> None:
+    def __init__(self, block_size: int, embed_size: int) -> None:
         super().__init__()
 
-        pos_encoding = torch.zeros(max_seq_length, embed_size, dtype=torch.float32)
+        pos_encoding = torch.zeros(block_size, embed_size, dtype=torch.float32)
 
-        pos_arange = torch.arange(max_seq_length, dtype=torch.float32).unsqueeze(1)
+        pos_arange = torch.arange(block_size, dtype=torch.float32).unsqueeze(1)
         dim_arange = torch.arange(embed_size // 2, dtype=torch.float32)
 
         div_factor = 10_000 ** ((2 * dim_arange) / embed_size)
