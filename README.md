@@ -10,3 +10,5 @@ Exploring how transformers work.
 
 ### Byte-Pair Encoding
 * Andrej Karpathy: https://www.youtube.com/watch?v=zduSFxRajkE&ab_channel=AndrejKarpathy
+* Andrej Karpathy: https://github.com/karpathy/minbpe/tree/master
+* Wikipedia: https://en.wikipedia.org/wiki/Byte_pair_encoding

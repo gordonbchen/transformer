@@ -4,9 +4,15 @@ import matplotlib.pyplot as plt
 from tqdm import tqdm
 from pathlib import Path
 
-from data import get_shakespeare_vocab_data, decode, encode
+from data import get_shakespeare_encoder_data, BytePairEncoder
 from model import Transformer
-from hyperparams import HyperParams as HP
+
+
+class HyperParams:
+    """Stores hyperparams."""
+
+    DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
+    print(f"\nUsing device: {DEVICE}")
 
 
 def get_batch(data: torch.Tensor, block_size: int, batch_size: int) -> torch.Tensor:
@@ -23,7 +29,7 @@ def calc_batch_loss(
 ) -> torch.Tensor:
     """Calculate model loss on a data batch."""
     xb, yb = get_batch(data, model.block_size, batch_size)
-    xb, yb = xb.to(HP.DEVICE), yb.to(HP.DEVICE)
+    xb, yb = xb.to(HyperParams.DEVICE), yb.to(HyperParams.DEVICE)
 
     logits, loss = model(xb, targets=yb)
     return loss
@@ -58,6 +64,8 @@ def train_model(
     loss_steps = []
     train_losses = []
     val_losses = []
+
+    print("\nTraining model")
     for step in tqdm(range(steps)):
         model.train()
         loss = calc_batch_loss(model, train_data, batch_size)
@@ -67,11 +75,11 @@ def train_model(
         optimizer.step()
 
         if (step % eval_step_size == 0) or (step == steps - 1):
-            train_loss = eval_model(model, train_data, batch_size, eval_steps)
-            val_loss = eval_model(model, val_data, batch_size, eval_steps)
-
             loss_steps.append(step)
-            train_losses.append(train_loss)
+
+            train_losses.append(loss.item())
+
+            val_loss = eval_model(model, val_data, batch_size, eval_steps)
             val_losses.append(val_loss)
 
     return loss_steps, train_losses, val_losses
@@ -92,7 +100,11 @@ def plot_loss(
     ax.legend(loc="best")
 
     ax.set_xticks(loss_steps)
-    ax.set_yticks(torch.arange(1.0, 4.0, step=0.25))
+    ax.tick_params(axis="x", which="both", labelrotation=45)
+
+    min_y = int(min(val_losses + train_losses))
+    max_y = int(max(val_losses + train_losses)) + 1
+    ax.set_yticks(torch.arange(min_y, max_y, step=0.25))
 
     ax.grid(visible=True, which="both", axis="both")
 
@@ -100,30 +112,30 @@ def plot_loss(
         save_path.parent.mkdir()
     fig.savefig(save_path)
 
-def generate_text(model: torch.nn.Module, vocab: list[str], prompt: str, n_tokens: int) -> str:
+def generate_text(model: torch.nn.Module, bpe: BytePairEncoder, prompt: str, n_tokens: int) -> str:
     """Generate text."""
     model.eval()
 
     input_prompt_tokens = torch.tensor(
-        encode(prompt, vocab), dtype=torch.int64, device=HP.DEVICE
+        bpe.encode(prompt), dtype=torch.int64, device=HyperParams.DEVICE
     ).unsqueeze(0)
     new_tokens = model.generate(input_prompt_tokens, n_tokens)
-    return decode(new_tokens[0].tolist(), vocab)
+    return bpe.decode(new_tokens[0].tolist())
 
 
 if __name__ == "__main__":
-    vocab, train_data, val_data = get_shakespeare_vocab_data(val_split=0.1)
+    bpe, train_data, val_data = get_shakespeare_encoder_data(val_split=0.1, vocab_size=256 + 64)
 
     transformer = Transformer(
-        vocab_size=len(vocab),
+        vocab_size=len(bpe.vocab),
         d_model=256,
         d_ffwd=1024,
-        block_size=256,
+        block_size=128,
         n_heads=8,
         n_layers=6,
-        dropout=0.3,
+        dropout=0.6,
     )
-    transformer = transformer.to(HP.DEVICE)
+    transformer = transformer.to(HyperParams.DEVICE)
 
     optimizer = torch.optim.Adam(transformer.parameters(), lr=3e-4)
 
@@ -135,13 +147,14 @@ if __name__ == "__main__":
         batch_size=32,
         steps=5_000,
         eval_step_size=250,
-        eval_steps=32,
+        eval_steps=10,
     )
-    print(f"Min val loss: {min(val_losses)}")
+    print(f"\nMin val loss: {min(val_losses)}")
 
-    print(generate_text(transformer, vocab, prompt="To be or ", n_tokens=1_000))
+    print(f"\nGenerating text")
+    print(generate_text(transformer, bpe, prompt="To be or ", n_tokens=1_000))
     
-    save_name = "transformer"
+    save_name = "byte_pair_encoding_64"
     plot_loss(loss_steps, train_losses, val_losses, Path("loss_plots") / save_name)
 
     weights_path = Path("weights")
