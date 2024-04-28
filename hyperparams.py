@@ -1,7 +1,7 @@
 import torch
 
 
-class HyperParms:
+class HyperParams:
     """Stores hyperparams."""
 
     DEVICE = "cuda" if torch.cuda.is_available() else "cpu"

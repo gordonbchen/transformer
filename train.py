@@ -6,7 +6,7 @@ from pathlib import Path
 
 from data import get_shakespeare_vocab_data, decode, encode
 from model import Transformer
-from hyperparams import HyperParms as HP
+from hyperparams import HyperParams as HP
 
 
 def get_batch(data: torch.Tensor, block_size: int, batch_size: int) -> torch.Tensor:
@@ -91,9 +91,24 @@ def plot_loss(
 
     ax.legend(loc="best")
 
+    ax.set_xticks(loss_steps)
+    ax.set_yticks(torch.arange(1.0, 4.0, step=0.25))
+
+    ax.grid(visible=True, which="both", axis="both")
+
     if not save_path.parent.exists():
         save_path.parent.mkdir()
     fig.savefig(save_path)
+
+def generate_text(model: torch.nn.Module, vocab: list[str], prompt: str, n_tokens: int) -> str:
+    """Generate text."""
+    model.eval()
+
+    input_prompt_tokens = torch.tensor(
+        encode(prompt, vocab), dtype=torch.int64, device=HP.DEVICE
+    ).unsqueeze(0)
+    new_tokens = model.generate(input_prompt_tokens, n_tokens)
+    return decode(new_tokens[0].tolist(), vocab)
 
 
 if __name__ == "__main__":
@@ -106,7 +121,7 @@ if __name__ == "__main__":
         block_size=256,
         n_heads=8,
         n_layers=6,
-        dropout=0.2,
+        dropout=0.3,
     )
     transformer = transformer.to(HP.DEVICE)
 
@@ -117,26 +132,18 @@ if __name__ == "__main__":
         optimizer=optimizer,
         train_data=train_data,
         val_data=val_data,
-        batch_size=64,
+        batch_size=32,
         steps=5_000,
-        eval_step_size=1_000,
-        eval_steps=100,
+        eval_step_size=250,
+        eval_steps=32,
     )
+    print(f"Min val loss: {min(val_losses)}")
 
-    plot_loss(
-        loss_steps,
-        train_losses,
-        val_losses,
-        save_path=Path("loss_plots/sin_pos_embedding"),
-    )
-
-    transformer.eval()
-    input_prompt_tokens = torch.tensor(
-        encode("To be or", vocab), dtype=torch.int64, device=HP.DEVICE
-    ).unsqueeze(0)
-    new_tokens = transformer.generate(input_prompt_tokens, n_tokens=500)
-    print(decode(new_tokens[0].tolist(), vocab))
+    print(generate_text(transformer, vocab, prompt="To be or ", n_tokens=1_000))
+    
+    save_name = "transformer"
+    plot_loss(loss_steps, train_losses, val_losses, Path("loss_plots") / save_name)
 
     weights_path = Path("weights")
     weights_path.mkdir(exist_ok=True)
-    torch.save(transformer.state_dict(), weights_path / "transformer.pth")
+    torch.save(transformer.state_dict(), weights_path / f"{save_name}.pt")
