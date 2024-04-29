@@ -4,7 +4,7 @@ import matplotlib.pyplot as plt
 from tqdm import tqdm
 from pathlib import Path
 
-from data import get_shakespeare_encoder_data, BytePairEncoder
+from data import get_encoder_data, BytePairEncoder
 from model import Transformer
 
 
@@ -112,7 +112,10 @@ def plot_loss(
         save_path.parent.mkdir()
     fig.savefig(save_path)
 
-def generate_text(model: torch.nn.Module, bpe: BytePairEncoder, prompt: str, n_tokens: int) -> str:
+
+def generate_text(
+    model: torch.nn.Module, bpe: BytePairEncoder, prompt: str, n_tokens: int
+) -> str:
     """Generate text."""
     model.eval()
 
@@ -124,7 +127,9 @@ def generate_text(model: torch.nn.Module, bpe: BytePairEncoder, prompt: str, n_t
 
 
 if __name__ == "__main__":
-    bpe, train_data, val_data = get_shakespeare_encoder_data(val_split=0.1, vocab_size=256 + 64)
+    bpe, train_data, val_data = get_encoder_data(
+        "data/war_and_peace.txt", val_split=0.1, vocab_size=256 + 256
+    )
 
     transformer = Transformer(
         vocab_size=len(bpe.vocab),
@@ -132,7 +137,7 @@ if __name__ == "__main__":
         d_ffwd=1024,
         block_size=128,
         n_heads=8,
-        n_layers=6,
+        n_layers=8,
         dropout=0.6,
     )
     transformer = transformer.to(HyperParams.DEVICE)
@@ -145,7 +150,7 @@ if __name__ == "__main__":
         train_data=train_data,
         val_data=val_data,
         batch_size=32,
-        steps=5_000,
+        steps=10_000,
         eval_step_size=250,
         eval_steps=10,
     )
@@ -153,8 +158,8 @@ if __name__ == "__main__":
 
     print(f"\nGenerating text")
     print(generate_text(transformer, bpe, prompt="To be or ", n_tokens=1_000))
-    
-    save_name = "byte_pair_encoding_64"
+
+    save_name = "war_and_peace"
     plot_loss(loss_steps, train_losses, val_losses, Path("loss_plots") / save_name)
 
     weights_path = Path("weights")
