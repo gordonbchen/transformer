@@ -22,7 +22,7 @@ class BytePairEncoder:
         print("\nTraining byte pair encoder")
         for i in tqdm(range(vocab_size - 256)):
             bigram_freqs = {}
-            for chunk in token_chunks:  # TODO: multithreading.
+            for chunk in token_chunks:  # TODO: multiprocessing.
                 bigram_freqs = self.calc_bigram_freqs(chunk, bigram_freqs)
             
             max_bigram = max(bigram_freqs, key=bigram_freqs.get)
