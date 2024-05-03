@@ -164,7 +164,7 @@ class FeedForward(nn.Module):
         super().__init__()
         self.net = nn.Sequential(
             nn.Linear(d_model, d_ffwd, bias=True),
-            nn.ReLU(),
+            nn.GELU(),
             nn.Linear(d_ffwd, d_model, bias=True),
             nn.Dropout(dropout),
         )
