@@ -86,7 +86,7 @@ class MultiHeadAttention(nn.Module):
     def scaled_dot_product_attention(
         self, Q: torch.Tensor, K: torch.Tensor, V: torch.Tensor
     ) -> torch.Tensor:
-        wei = K @ Q.transpose(-2, -1)  # Calculate affinities.
+        wei = Q @ K.transpose(-2, -1)  # Calculate affinities.
         wei = wei * (self.head_size**-0.5)  # Scale by 1/sqrt(head_size).
 
         if self.mask_future:
