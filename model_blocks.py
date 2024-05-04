@@ -3,83 +3,22 @@ import torch.nn as nn
 from torch.nn import functional as F
 
 
-class Transformer(nn.Module):
-    """Transformer language model."""
+class Encoder(nn.Module):
+    """Transformer encoder."""
 
     def __init__(
         self,
-        vocab_size: int,
+        n_heads: int,
         d_model: int,
         d_ffwd: int,
         block_size: int,
-        n_heads: int,
-        n_layers: int,
         dropout: float,
+        mask_future: bool,
     ) -> None:
         super().__init__()
-
-        self.block_size = block_size
-
-        self.token_embedding = nn.Embedding(vocab_size, d_model)
-        self.position_embedding = SinPositionalEncoding(block_size, d_model)
-
-        self.attention_blocks = nn.Sequential(
-            *(
-                AttentionBlock(n_heads, d_model, d_ffwd, block_size, dropout)
-                for i in range(n_layers)
-            )
+        self.mha = MultiHeadAttention(
+            n_heads, d_model, block_size, dropout, mask_future
         )
-
-        self.layer_norm = nn.LayerNorm(d_model)
-
-        self.model_head = nn.Linear(d_model, vocab_size)
-
-    def forward(
-        self, inputs: torch.Tensor, targets: torch.Tensor = None
-    ) -> tuple[torch.Tensor, None | torch.Tensor]:
-        B, T = inputs.shape  # inputs and targets are (B, T).
-
-        token_embeddings = self.token_embedding(inputs)  # (B, T, embed_size).
-        embeddings = self.position_embedding(token_embeddings)
-
-        z = self.attention_blocks(embeddings)
-        z = self.layer_norm(z)
-        logits = self.model_head(z)  # (B, T, vocab_size).
-
-        loss = None
-
-        # Calc cross-entropy loss.
-        if targets != None:
-            B, T, C = logits.shape
-            logits = logits.view(B * T, C)
-
-            targets = targets.view(B * T)
-            loss = F.cross_entropy(logits, targets)
-
-        return logits, loss
-
-    @torch.no_grad()
-    def generate(self, tokens: torch.Tensor, n_tokens: int) -> torch.Tensor:
-        for i in range(n_tokens):
-            logits, _ = self(tokens[:, -self.block_size :])  # (B, T, C)
-            logits = logits[:, -1, :]  # only use last pred col. (B, C)
-
-            probs = F.softmax(logits, dim=-1)
-            next_tokens = torch.multinomial(probs, num_samples=1)
-
-            tokens = torch.cat((tokens, next_tokens), dim=-1)  # append. (B, T+1)
-
-        return tokens
-
-
-class AttentionBlock(nn.Module):
-    """A multi-head attention block."""
-
-    def __init__(
-        self, n_heads: int, d_model: int, d_ffwd: int, block_size: int, dropout: float
-    ) -> None:
-        super().__init__()
-        self.mha = MultiHeadAttention(n_heads, d_model, block_size, dropout)
         self.ffwd = FeedForward(d_model, d_ffwd, dropout)
 
         self.layer_norm1 = nn.LayerNorm(d_model)
@@ -87,7 +26,7 @@ class AttentionBlock(nn.Module):
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         z = self.layer_norm1(x)
-        z = z + self.mha(z)
+        z = z + self.mha(z, z, z)
 
         z = self.layer_norm2(z)
         z = z + self.ffwd(z)
@@ -98,7 +37,12 @@ class MultiHeadAttention(nn.Module):
     """Multi-head attention."""
 
     def __init__(
-        self, n_heads: int, d_model: int, block_size: int, dropout: float
+        self,
+        n_heads: int,
+        d_model: int,
+        block_size: int,
+        dropout: float,
+        mask_future: bool,
     ) -> None:
         super().__init__()
 
@@ -113,21 +57,25 @@ class MultiHeadAttention(nn.Module):
         self.q_net = nn.Linear(d_model, d_model, bias=False)
         self.v_net = nn.Linear(d_model, d_model, bias=False)
 
-        self.register_buffer("tril", torch.tril(torch.ones(block_size, block_size)))
+        if mask_future:
+            self.register_buffer("tril", torch.tril(torch.ones(block_size, block_size)))
+        self.mask_future = mask_future
 
         self.wei_dropout = nn.Dropout(dropout)
 
         self.linear = nn.Linear(d_model, d_model, bias=True)
         self.output_dropout = nn.Dropout(dropout)
 
-    def forward(self, x: torch.Tensor) -> torch.Tensor:
-        K = self.k_net(x)
-        Q = self.q_net(x)
-        V = self.v_net(x)
+    def forward(
+        self, q: torch.Tensor, k: torch.Tensor, v: torch.Tensor
+    ) -> torch.Tensor:
+        Q = self.q_net(q)
+        K = self.k_net(k)
+        V = self.v_net(v)
 
-        K, Q, V = (self.split_heads(i) for i in (K, Q, V))
+        Q, K, V = (self.split_heads(i) for i in (Q, K, V))
 
-        z = self.scaled_dot_product_attention(K, Q, V)
+        z = self.scaled_dot_product_attention(Q, K, V)
 
         z = self.combine_heads(z)
 
@@ -135,12 +83,16 @@ class MultiHeadAttention(nn.Module):
         z = self.output_dropout(z)
         return z
 
-    def scaled_dot_product_attention(self, K, Q, V):
+    def scaled_dot_product_attention(
+        self, Q: torch.Tensor, K: torch.Tensor, V: torch.Tensor
+    ) -> torch.Tensor:
         wei = K @ Q.transpose(-2, -1)  # Calculate affinities.
         wei = wei * (self.head_size**-0.5)  # Scale by 1/sqrt(head_size).
 
-        T = wei.shape[-1]  # Only mask to time length (for short seqence generation).
-        wei = wei.masked_fill((self.tril == 0)[:T, :T], float("-inf"))  # Mask future.
+        if self.mask_future:
+            # Mask to time length (for short sequence generation).
+            T = wei.shape[-1]
+            wei = wei.masked_fill((self.tril == 0)[:T, :T], float("-inf"))
 
         wei = F.softmax(wei, dim=-1)  # Softmax smoothing.
         wei = self.wei_dropout(wei)

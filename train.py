@@ -1,11 +1,14 @@
 import torch
+import torch.nn as nn
+import torch.nn.functional as F
+
 import matplotlib.pyplot as plt
 
 from tqdm import tqdm
 from pathlib import Path
 
 from data import get_encoder_data, BytePairEncoder
-from model import Transformer
+from gpt import GPT
 
 
 class HyperParams:
@@ -25,20 +28,25 @@ def get_batch(data: torch.Tensor, block_size: int, batch_size: int) -> torch.Ten
 
 
 def calc_batch_loss(
-    model: torch.nn.Module, data: torch.Tensor, batch_size: int
+    model: nn.Module, data: torch.Tensor, batch_size: int
 ) -> torch.Tensor:
     """Calculate model loss on a data batch."""
     xb, yb = get_batch(data, model.block_size, batch_size)
     xb, yb = xb.to(HyperParams.DEVICE), yb.to(HyperParams.DEVICE)
 
-    logits, loss = model(xb, targets=yb)
+    logits = model(xb)
+
+    # Calc cross-entropy loss.
+    B, T, C = logits.shape
+    logits = logits.view(B * T, C)
+    yb = yb.view(B * T)
+
+    loss = F.cross_entropy(logits, yb)
     return loss
 
 
 @torch.no_grad()
-def eval_model(
-    model: torch.nn.Module, data: torch.Tensor, batch_size: int, eval_steps: int
-):
+def eval_model(model: nn.Module, data: torch.Tensor, batch_size: int, eval_steps: int):
     """Evaluate model loss across many steps."""
     model.eval()
 
@@ -51,7 +59,7 @@ def eval_model(
 
 
 def train_model(
-    model: torch.nn.Module,
+    model: nn.Module,
     optimizer: torch.optim.Optimizer,
     train_data: torch.Tensor,
     val_data: torch.Tensor,
@@ -68,9 +76,10 @@ def train_model(
     print("\nTraining model")
     for step in tqdm(range(steps)):
         model.train()
+        optimizer.zero_grad(set_to_none=True)
+
         loss = calc_batch_loss(model, train_data, batch_size)
 
-        optimizer.zero_grad(set_to_none=True)
         loss.backward()
         optimizer.step()
 
@@ -113,9 +122,7 @@ def plot_loss(
     fig.savefig(save_path)
 
 
-def generate_text(
-    model: torch.nn.Module, bpe: BytePairEncoder, prompt: str, n_tokens: int
-) -> str:
+def generate_text(model: GPT, bpe: BytePairEncoder, prompt: str, n_tokens: int) -> str:
     """Generate text."""
     model.eval()
 
@@ -131,7 +138,7 @@ if __name__ == "__main__":
         "data/war_and_peace.txt", val_split=0.1, vocab_size=256 + 256
     )
 
-    transformer = Transformer(
+    gpt = GPT(
         vocab_size=len(bpe.vocab),
         d_model=256,
         d_ffwd=1024,
@@ -140,28 +147,28 @@ if __name__ == "__main__":
         n_layers=8,
         dropout=0.6,
     )
-    transformer = transformer.to(HyperParams.DEVICE)
+    gpt = gpt.to(HyperParams.DEVICE)
 
-    optimizer = torch.optim.Adam(transformer.parameters(), lr=3e-4)
+    optimizer = torch.optim.Adam(gpt.parameters(), lr=3e-4)
 
     loss_steps, train_losses, val_losses = train_model(
-        transformer,
+        gpt,
         optimizer=optimizer,
         train_data=train_data,
         val_data=val_data,
         batch_size=32,
-        steps=10_000,
+        steps=5_000,
         eval_step_size=250,
         eval_steps=10,
     )
     print(f"\nMin val loss: {min(val_losses)}")
 
-    print(f"\nGenerating text")
-    print(generate_text(transformer, bpe, prompt="To be or ", n_tokens=1_000))
+    print("\nGenerating text")
+    print(generate_text(gpt, bpe, prompt="To be or ", n_tokens=1_000))
 
     save_name = "war_and_peace"
     plot_loss(loss_steps, train_losses, val_losses, Path("loss_plots") / save_name)
 
     weights_path = Path("weights")
     weights_path.mkdir(exist_ok=True)
-    torch.save(transformer.state_dict(), weights_path / f"{save_name}.pt")
+    torch.save(gpt.state_dict(), weights_path / f"{save_name}.pt")
