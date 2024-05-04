@@ -8,11 +8,19 @@ from pathlib import Path
 class BytePairEncoder:
     """Byte-pair encoder."""
 
-    def __init__(self, text: str, vocab_size: int) -> None:
+    def __init__(self, text: str | list[str], vocab_size: int) -> None:
         assert vocab_size >= 256, f"vocab_size {vocab_size} must be >= 256."
 
         split_pattern = re.compile(r"""[ ']?[a-zA-Z]+|\d{1,4}|\s+(?!\S)|.+?""")
-        text_chunks = split_pattern.findall(text)
+
+        # Used list of sentences for translation tasks.
+        if type(text) is str:
+            text = [text]
+
+        text_chunks = []
+        for sentence in text:
+            text_chunks += split_pattern.findall(sentence)
+
         token_chunks = [list(chunk.encode("utf-8")) for chunk in text_chunks]
 
         self.merges: dict[tuple[int, int], int] = {}
