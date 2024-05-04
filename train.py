@@ -146,7 +146,7 @@ def generate_text(model: GPT, bpe: BytePairEncoder, prompt: str, n_tokens: int) 
 
 if __name__ == "__main__":
     bpe, train_data, val_data = get_encoder_data(
-        "data/war_and_peace.txt", val_split=0.1, vocab_size=256 + 256
+        "datasets/war_and_peace.txt", val_split=0.1, vocab_size=256 + 256
     )
 
     gpt = GPT(
