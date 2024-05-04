@@ -88,7 +88,8 @@ def train_model(
 
             train_losses.append(loss.item())
 
-            val_loss = eval_model(model, val_data, batch_size, eval_steps)
+            # Use 2 * batch_size b/c no grad storing.
+            val_loss = eval_model(model, val_data, batch_size * 2, eval_steps)
             val_losses.append(val_loss)
 
     return loss_steps, train_losses, val_losses
