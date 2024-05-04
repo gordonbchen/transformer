@@ -16,13 +16,13 @@ class Encoder(nn.Module):
         mask_future: bool,
     ) -> None:
         super().__init__()
+        self.layer_norm1 = nn.LayerNorm(d_model)
         self.mha = MultiHeadAttention(
             n_heads, d_model, block_size, dropout, mask_future
         )
-        self.ffwd = FeedForward(d_model, d_ffwd, dropout)
 
-        self.layer_norm1 = nn.LayerNorm(d_model)
         self.layer_norm2 = nn.LayerNorm(d_model)
+        self.ffwd = FeedForward(d_model, d_ffwd, dropout)
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         z = self.layer_norm1(x)
