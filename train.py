@@ -122,15 +122,25 @@ def plot_loss(
     fig.savefig(save_path)
 
 
+@torch.no_grad()
 def generate_text(model: GPT, bpe: BytePairEncoder, prompt: str, n_tokens: int) -> str:
     """Generate text."""
     model.eval()
 
-    input_prompt_tokens = torch.tensor(
+    tokens = torch.tensor(
         bpe.encode(prompt), dtype=torch.int64, device=HyperParams.DEVICE
     ).unsqueeze(0)
-    new_tokens = model.generate(input_prompt_tokens, n_tokens)
-    return bpe.decode(new_tokens[0].tolist())
+
+    for i in range(n_tokens):
+        logits = model(tokens[:, -model.block_size :])  # (B, T, C)
+        logits = logits[:, -1, :]  # only use last pred col. (B, C)
+
+        probs = F.softmax(logits, dim=-1)
+        next_tokens = torch.multinomial(probs, num_samples=1)
+
+        tokens = torch.cat((tokens, next_tokens), dim=-1)  # append. (B, T+1)
+
+    return bpe.decode(tokens[0].tolist())
 
 
 if __name__ == "__main__":
