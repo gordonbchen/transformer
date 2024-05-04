@@ -8,7 +8,7 @@ from tqdm import tqdm
 from pathlib import Path
 
 from data import get_encoder_data, BytePairEncoder
-from gpt import GPT
+from models.gpt import GPT
 
 
 class HyperParams:

@@ -1,7 +1,7 @@
 import torch
 import torch.nn as nn
 
-from model_blocks import TokenEncoding, Encoder, Decoder
+from models.model_blocks import TokenEncoding, Encoder, Decoder
 
 
 class Translator(nn.Module):

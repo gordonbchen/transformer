@@ -1,7 +1,7 @@
 import torch
 import torch.nn as nn
 
-from model_blocks import TokenEncoding, Encoder
+from models.model_blocks import TokenEncoding, Encoder
 
 
 class GPT(nn.Module):
