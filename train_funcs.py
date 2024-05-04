@@ -7,10 +7,6 @@ import matplotlib.pyplot as plt
 from tqdm import tqdm
 from pathlib import Path
 
-from data.data import get_encoder_data
-from data.bpe import BytePairEncoder as BPE
-from models.gpt import GPT
-
 
 class HyperParams:
     """Stores hyperparams."""
@@ -93,6 +89,7 @@ def train_model(
             val_loss = eval_model(model, val_data, batch_size * 2, eval_steps)
             val_losses.append(val_loss)
 
+    print(f"\nMin val loss: {min(val_losses)}")
     return loss_steps, train_losses, val_losses
 
 
@@ -122,65 +119,3 @@ def plot_loss(
     if not save_path.parent.exists():
         save_path.parent.mkdir()
     fig.savefig(save_path)
-
-
-@torch.no_grad()
-def generate_text(model: GPT, bpe: BPE, prompt: str, n_tokens: int) -> str:
-    """Generate text."""
-    model.eval()
-
-    tokens = torch.tensor(
-        bpe.encode(prompt), dtype=torch.int64, device=HyperParams.DEVICE
-    ).unsqueeze(0)
-
-    for i in range(n_tokens):
-        logits = model(tokens[:, -model.block_size :])  # (B, T, C)
-        logits = logits[:, -1, :]  # only use last pred col. (B, C)
-
-        probs = F.softmax(logits, dim=-1)
-        next_tokens = torch.multinomial(probs, num_samples=1)
-
-        tokens = torch.cat((tokens, next_tokens), dim=-1)  # append. (B, T+1)
-
-    return bpe.decode(tokens[0].tolist())
-
-
-if __name__ == "__main__":
-    bpe, train_data, val_data = get_encoder_data(
-        "datasets/war_and_peace.txt", val_split=0.1, vocab_size=256 + 256
-    )
-
-    gpt = GPT(
-        vocab_size=len(bpe.vocab),
-        d_model=256,
-        d_ffwd=1024,
-        block_size=128,
-        n_heads=8,
-        n_layers=8,
-        dropout=0.6,
-    )
-    gpt = gpt.to(HyperParams.DEVICE)
-
-    optimizer = torch.optim.Adam(gpt.parameters(), lr=3e-4)
-
-    loss_steps, train_losses, val_losses = train_model(
-        gpt,
-        optimizer=optimizer,
-        train_data=train_data,
-        val_data=val_data,
-        batch_size=32,
-        steps=5_000,
-        eval_step_size=250,
-        eval_steps=10,
-    )
-    print(f"\nMin val loss: {min(val_losses)}")
-
-    print("\nGenerating text")
-    print(generate_text(gpt, bpe, prompt="To be or ", n_tokens=1_000))
-
-    save_name = "war_and_peace"
-    plot_loss(loss_steps, train_losses, val_losses, Path("loss_plots") / save_name)
-
-    weights_path = Path("weights")
-    weights_path.mkdir(exist_ok=True)
-    torch.save(gpt.state_dict(), weights_path / f"{save_name}.pt")
