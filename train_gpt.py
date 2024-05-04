@@ -1,5 +1,6 @@
 import torch
 import torch.nn.functional as F
+from torch.utils.data import Dataset, DataLoader, random_split
 
 from pathlib import Path
 
@@ -8,29 +9,44 @@ from models.gpt import GPT
 from bpe import BytePairEncoder as BPE
 
 
-def train_val_split(
-    data: torch.Tensor, val_split: float
-) -> tuple[torch.Tensor, torch.Tensor]:
-    """Split data into train and val."""
-    n_val_samples = int(len(data) * val_split)
-
-    val_data = data[:n_val_samples]
-    train_data = data[n_val_samples:]
-    return train_data, val_data
-
-
-def get_encoder_data(
-    text_file: str, val_split: float, vocab_size: int
-) -> tuple[BPE, torch.Tensor, torch.Tensor]:
-    """Get encoded text data. Return encoder, train data, and val data."""
+def get_encoder_dataloaders(
+    text_file: str,
+    val_split: float,
+    vocab_size: int,
+    block_size: int,
+    batch_size: int,
+) -> tuple[BPE, DataLoader, DataLoader]:
+    """Get encoded text data. Return encoder, train and val dataloaders."""
     with open(text_file, mode="r") as f:
         text = f.read()
 
     bpe = BPE(text, vocab_size)
-    data = torch.tensor(bpe.encode(text), dtype=torch.int64)
 
-    train_data, val_data = train_val_split(data, val_split)
-    return bpe, train_data, val_data
+    print("\nEncoding text")
+    tokens = torch.tensor(bpe.encode(text), dtype=torch.int64)
+
+    ds = GPTDataset(tokens, block_size)
+    train_ds, val_ds = random_split(ds, [1 - val_split, val_split])
+
+    train_dl = DataLoader(train_ds, batch_size, shuffle=True)
+    val_dl = DataLoader(val_ds, batch_size * 2, shuffle=True)
+    return bpe, train_dl, val_dl
+
+
+class GPTDataset(Dataset):
+    """Dataset for GPT training."""
+
+    def __init__(self, tokens: torch.Tensor, block_size: int):
+        self.tokens = tokens
+        self.block_size = block_size
+
+    def __len__(self) -> int:
+        return len(self.tokens) - self.block_size
+
+    def __getitem__(self, idx: int) -> tuple[torch.Tensor, torch.Tensor]:
+        x = self.tokens[idx : idx + self.block_size]
+        y = self.tokens[idx + 1 : idx + self.block_size + 1]
+        return x, y
 
 
 @torch.no_grad()
@@ -55,15 +71,20 @@ def generate_text(model: GPT, bpe: BPE, prompt: str, n_tokens: int) -> str:
 
 
 if __name__ == "__main__":
-    bpe, train_data, val_data = get_encoder_data(
-        "datasets/war_and_peace.txt", val_split=0.1, vocab_size=256 + 256
+    BLOCK_SIZE = 128
+    bpe, train_dl, val_dl = get_encoder_dataloaders(
+        "datasets/war_and_peace.txt",
+        val_split=0.01,
+        vocab_size=256 + 256,
+        block_size=BLOCK_SIZE,
+        batch_size=32,
     )
 
     gpt = GPT(
         vocab_size=len(bpe.vocab),
         d_model=256,
         d_ffwd=1024,
-        block_size=128,
+        block_size=BLOCK_SIZE,
         n_heads=8,
         n_layers=8,
         dropout=0.6,
@@ -75,9 +96,8 @@ if __name__ == "__main__":
     loss_steps, train_losses, val_losses = train_model(
         gpt,
         optimizer=optimizer,
-        train_data=train_data,
-        val_data=val_data,
-        batch_size=32,
+        train_dl=train_dl,
+        val_dl=val_dl,
         steps=5_000,
         eval_step_size=250,
         eval_steps=10,

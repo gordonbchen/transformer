@@ -1,11 +1,13 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+from torch.utils.data import DataLoader
 
 import matplotlib.pyplot as plt
 
 from tqdm import tqdm
 from pathlib import Path
+from typing import Iterator
 
 
 class HyperParams:
@@ -15,25 +17,8 @@ class HyperParams:
     print(f"\nUsing device: {DEVICE}")
 
 
-def get_batch(data: torch.Tensor, block_size: int, batch_size: int) -> torch.Tensor:
-    """Get random batch."""
-    inds = torch.randint(len(data) - block_size - 1, size=(batch_size,))
-
-    xb = torch.stack([data[i : i + block_size] for i in inds])
-    yb = torch.stack([data[i + 1 : i + block_size + 1] for i in inds])
-    return xb, yb
-
-
-def calc_batch_loss(
-    model: nn.Module, data: torch.Tensor, batch_size: int
-) -> torch.Tensor:
-    """Calculate model loss on a data batch."""
-    xb, yb = get_batch(data, model.block_size, batch_size)
-    xb, yb = xb.to(HyperParams.DEVICE), yb.to(HyperParams.DEVICE)
-
-    logits = model(xb)
-
-    # Calc cross-entropy loss.
+def calc_batch_loss(logits: torch.Tensor, yb: torch.Tensor) -> torch.Tensor:
+    """Calculate model loss on a batch of data."""
     B, T, C = logits.shape
     logits = logits.view(B * T, C)
     yb = yb.view(B * T)
@@ -43,14 +28,16 @@ def calc_batch_loss(
 
 
 @torch.no_grad()
-def eval_model(model: nn.Module, data: torch.Tensor, batch_size: int, eval_steps: int):
-    """Evaluate model loss across many steps."""
+def eval_model(model: nn.Module, val_dl: DataLoader, eval_steps: int) -> float:
+    """Evaluate model loss."""
     model.eval()
+
+    val_dl_iterator = iter(val_dl)
 
     total_loss = 0
     for step in range(eval_steps):
-        loss = calc_batch_loss(model, data, batch_size)
-        total_loss += loss.item()
+        xb, yb, val_dl_iterator = get_next_batch(val_dl_iterator, val_dl)
+        total_loss += calc_batch_loss(model(xb), yb).item()
 
     return total_loss / eval_steps
 
@@ -58,9 +45,8 @@ def eval_model(model: nn.Module, data: torch.Tensor, batch_size: int, eval_steps
 def train_model(
     model: nn.Module,
     optimizer: torch.optim.Optimizer,
-    train_data: torch.Tensor,
-    val_data: torch.Tensor,
-    batch_size: int,
+    train_dl: DataLoader,
+    val_dl: DataLoader,
     steps: int,
     eval_step_size: int,
     eval_steps: int,
@@ -71,26 +57,39 @@ def train_model(
     val_losses = []
 
     print("\nTraining model")
+    train_dl_iterator = iter(train_dl)
+
     for step in tqdm(range(steps)):
         model.train()
         optimizer.zero_grad(set_to_none=True)
 
-        loss = calc_batch_loss(model, train_data, batch_size)
+        xb, yb, train_dl_iterator = get_next_batch(train_dl_iterator, train_dl)
 
+        loss = calc_batch_loss(model(xb), yb)
         loss.backward()
         optimizer.step()
 
         if (step % eval_step_size == 0) or (step == steps - 1):
             loss_steps.append(step)
-
             train_losses.append(loss.item())
 
-            # Use 2 * batch_size b/c no grad storing.
-            val_loss = eval_model(model, val_data, batch_size * 2, eval_steps)
+            val_loss = eval_model(model, val_dl, eval_steps)
             val_losses.append(val_loss)
 
     print(f"\nMin val loss: {min(val_losses)}")
     return loss_steps, train_losses, val_losses
+
+
+def get_next_batch(
+    dl_iterator: Iterator, dl: DataLoader
+) -> tuple[torch.Tensor, torch.Tensor, Iterator]:
+    try:
+        xb, yb = next(dl_iterator)
+    except StopIteration:
+        dl_iterator = iter(dl)
+        xb, yb = next(dl_iterator)
+
+    return xb.to(HyperParams.DEVICE), yb.to(HyperParams.DEVICE), dl_iterator
 
 
 def plot_loss(
