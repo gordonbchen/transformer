@@ -93,6 +93,7 @@ class MultiHeadAttention(nn.Module):
         self.q_net = nn.Linear(d_model, d_model, bias=False)
         self.v_net = nn.Linear(d_model, d_model, bias=False)
 
+        # TODO: support padding masks.
         if mask_future:
             self.register_buffer("tril", torch.tril(torch.ones(block_size, block_size)))
         self.mask_future = mask_future
