@@ -7,7 +7,8 @@ import matplotlib.pyplot as plt
 from tqdm import tqdm
 from pathlib import Path
 
-from data import get_encoder_data, BytePairEncoder
+from data.data import get_encoder_data
+from data.bpe import BytePairEncoder as BPE
 from models.gpt import GPT
 
 
@@ -124,7 +125,7 @@ def plot_loss(
 
 
 @torch.no_grad()
-def generate_text(model: GPT, bpe: BytePairEncoder, prompt: str, n_tokens: int) -> str:
+def generate_text(model: GPT, bpe: BPE, prompt: str, n_tokens: int) -> str:
     """Generate text."""
     model.eval()
 
