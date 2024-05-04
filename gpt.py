@@ -35,10 +35,9 @@ class GPT(nn.Module):
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         z = self.token_encoding(x)  # (B, T, d_model).
-
         z = self.attention_blocks(z)
-        z = self.layer_norm(z)
 
+        z = self.layer_norm(z)
         logits = self.model_head(z)  # (B, T, vocab_size).
         return logits
 
