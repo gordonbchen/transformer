@@ -33,6 +33,42 @@ class Encoder(nn.Module):
         return z
 
 
+class Decoder(nn.Module):
+    """Transformer decoder."""
+
+    def __init__(
+        self, n_heads: int, d_model: int, d_ffwd: int, block_size: int, dropout: float
+    ) -> None:
+        super().__init__()
+
+        self.layer_norm1 = nn.LayerNorm(d_model)
+        self.self_attention = MultiHeadAttention(
+            n_heads, d_model, block_size, dropout, mask_future=True
+        )
+
+        self.layer_norm2 = nn.LayerNorm(d_model)
+        # No future masking b/c kv comes from encoder.
+        self.cross_attention = MultiHeadAttention(
+            n_heads, d_model, block_size, dropout, mask_future=False
+        )
+
+        self.layer_norm3 = nn.LayerNorm(d_model)
+        self.ffwd = FeedForward(d_model, d_ffwd, dropout)
+
+    def forward(
+        self, x: torch.Tensor, encoder_k: torch.Tensor, encoder_v: torch.Tensor
+    ) -> torch.Tensor:
+        z = self.layer_norm1(x)
+        z = z + self.self_attention(z, z, z)
+
+        z = self.layer_norm2(z)
+        z = z + self.cross_attention(z, encoder_k, encoder_v)
+
+        z = self.layer_norm3(z)
+        z = z + self.ffwd(z)
+        return z
+
+
 class MultiHeadAttention(nn.Module):
     """Multi-head attention."""
 
