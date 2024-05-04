@@ -2,7 +2,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
-from model_blocks import SinPositionalEncoding, Encoder
+from model_blocks import TokenEncoding, Encoder
 
 
 class GPT(nn.Module):
@@ -22,9 +22,7 @@ class GPT(nn.Module):
 
         self.block_size = block_size
 
-        self.token_embedding = nn.Embedding(vocab_size, d_model)
-        self.position_embedding = SinPositionalEncoding(block_size, d_model)
-
+        self.token_encoding = TokenEncoding(vocab_size, d_model, block_size)
         self.attention_blocks = nn.Sequential(
             *(
                 Encoder(n_heads, d_model, d_ffwd, block_size, dropout, mask_future=True)
@@ -33,14 +31,12 @@ class GPT(nn.Module):
         )
 
         self.layer_norm = nn.LayerNorm(d_model)
-
         self.model_head = nn.Linear(d_model, vocab_size)
 
-    def forward(self, inputs: torch.Tensor) -> torch.Tensor:
-        token_embeddings = self.token_embedding(inputs)  # (B, T, embed_size).
-        embeddings = self.position_embedding(token_embeddings)
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        z = self.token_encoding(x)  # (B, T, d_model).
 
-        z = self.attention_blocks(embeddings)
+        z = self.attention_blocks(z)
         z = self.layer_norm(z)
 
         logits = self.model_head(z)  # (B, T, vocab_size).

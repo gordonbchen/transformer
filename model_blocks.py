@@ -124,7 +124,7 @@ class MultiHeadAttention(nn.Module):
         self, Q: torch.Tensor, K: torch.Tensor, V: torch.Tensor
     ) -> torch.Tensor:
         wei = Q @ K.transpose(-2, -1)  # Calculate affinities.
-        wei = wei * (self.head_size**-0.5)  # Scale by 1/sqrt(head_size).
+        wei = wei * (self.head_size**-0.5)
 
         if self.mask_future:
             # Mask to time length (for short sequence generation).
@@ -162,22 +162,37 @@ class FeedForward(nn.Module):
         return self.net(x)
 
 
+class TokenEncoding(nn.Module):
+    """Token embedding + sin position encoding."""
+
+    def __init__(self, vocab_size: int, d_model: int, block_size: int) -> None:
+        super().__init__()
+
+        self.token_embedding = nn.Embedding(vocab_size, d_model)
+        self.pos_encoding = SinPositionalEncoding(block_size, d_model)
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        z = self.token_embedding(x)
+        z = z + self.pos_encoding(z)
+        return z
+
+
 class SinPositionalEncoding(nn.Module):
     """Sinusoidal positional encoding."""
 
-    def __init__(self, block_size: int, embed_size: int) -> None:
+    def __init__(self, block_size: int, d_model: int) -> None:
         super().__init__()
 
-        pos_encoding = torch.zeros(block_size, embed_size, dtype=torch.float32)
+        pos_encoding = torch.zeros(block_size, d_model, dtype=torch.float32)
 
         pos_arange = torch.arange(block_size, dtype=torch.float32).unsqueeze(1)
-        dim_arange = torch.arange(embed_size // 2, dtype=torch.float32)
+        dim_arange = torch.arange(d_model // 2, dtype=torch.float32)
 
-        div_factor = 10_000 ** ((2 * dim_arange) / embed_size)
+        div_factor = 10_000 ** ((2 * dim_arange) / d_model)
         pos_encoding[:, ::2] = torch.sin(pos_arange / div_factor)
         pos_encoding[:, 1::2] = torch.cos(pos_arange / div_factor)
 
         self.register_buffer("pos_encoding", pos_encoding.unsqueeze(0))
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
-        return x + self.pos_encoding[:, : x.shape[-2]]
+        return self.pos_encoding[:, : x.shape[-2]]
