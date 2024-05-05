@@ -11,9 +11,9 @@ from bpe import BytePairEncoder as BPE
 
 def get_encoder_dataloaders(
     text_file: str,
-    val_split: float,
     vocab_size: int,
     block_size: int,
+    val_split: float,
     batch_size: int,
 ) -> tuple[BPE, DataLoader, DataLoader]:
     """Get encoded text data. Return encoder, train and val dataloaders."""
@@ -74,9 +74,9 @@ if __name__ == "__main__":
     BLOCK_SIZE = 128
     bpe, train_dl, val_dl = get_encoder_dataloaders(
         "datasets/war_and_peace.txt",
-        val_split=0.01,
         vocab_size=256 + 256,
         block_size=BLOCK_SIZE,
+        val_split=0.01,
         batch_size=32,
     )
 
