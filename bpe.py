@@ -47,6 +47,14 @@ class BytePairEncoder:
         print("\nNew vocab")
         print([self.vocab[i] for i in range(256, len(self.vocab))])
 
+        self.special_tokens: dict[str, int] = {}
+
+    def add_special_tokens(self, special_tokens: list[str]):
+        for token in special_tokens:
+            i = len(self.vocab)
+            self.vocab[i] = bytes()  # Placeholder just to increase vocab size.
+            self.special_tokens[token] = i
+
     def encode(self, text: str) -> list[int]:
         tokens = list(text.encode("utf-8"))
         while len(tokens) >= 2:

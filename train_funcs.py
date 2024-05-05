@@ -89,7 +89,13 @@ def get_next_batch(
         dl_iterator = iter(dl)
         xb, yb = next(dl_iterator)
 
-    return xb.to(HyperParams.DEVICE), yb.to(HyperParams.DEVICE), dl_iterator
+    # Handle when xb is multiple tensors for nmt.
+    if type(xb) is not torch.Tensor:
+        xb = tuple(i.to(HyperParams.DEVICE) for i in xb)
+    else:
+        xb = xb.to(HyperParams.DEVICE)
+
+    return xb, yb.to(HyperParams.DEVICE), dl_iterator
 
 
 def plot_loss(
