@@ -201,14 +201,27 @@ if __name__ == "__main__":
         optimizer=optimizer,
         train_dl=train_dl,
         val_dl=val_dl,
-        steps=10_000,
+        steps=5_000,
         eval_step_size=250,
         eval_steps=10,
     )
 
-    eng_text = "I like to eat apples and swim."
-    print(f"Translating: {eng_text}")
-    print(translate(eng_text, translator, eng_bpe, spa_bpe, BLOCK_SIZE))
+    print("\nTranslating")
+    eng_sentences = [
+        "I like to eat apples and swim.",
+        "Can you speak French?",
+        "You can't blame her for not knowing what she hasn't been taught.",
+        "Get off my lawn!",
+        "He can speak ten languages.",
+        "I met a girl I like very much.",
+        "I am going to a wedding tomorrow.",
+        "Do you want to have lunch with me tomorrow?",
+    ]
+    for eng_sentence in eng_sentences:
+        spa_sentence = translate(eng_sentence, translator, eng_bpe, spa_bpe, BLOCK_SIZE)
+
+        print(f"Eng: {eng_sentence}")
+        print(f"Spa: {spa_sentence}\n")
 
     save_name = "eng_spa"
     plot_loss(loss_steps, train_losses, val_losses, Path("loss_plots") / save_name)
