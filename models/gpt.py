@@ -18,9 +18,6 @@ class GPT(nn.Module):
         dropout: float,
     ) -> None:
         super().__init__()
-
-        self.block_size = block_size
-
         self.token_encoding = TokenEncoding(vocab_size, d_model, block_size)
         self.attention_blocks = nn.Sequential(
             *(

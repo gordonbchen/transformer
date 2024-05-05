@@ -50,7 +50,9 @@ class GPTDataset(Dataset):
 
 
 @torch.no_grad()
-def generate_text(model: GPT, bpe: BPE, prompt: str, n_tokens: int) -> str:
+def generate_text(
+    model: GPT, block_size: int, bpe: BPE, prompt: str, n_tokens: int
+) -> str:
     """Generate text."""
     model.eval()
 
@@ -59,7 +61,7 @@ def generate_text(model: GPT, bpe: BPE, prompt: str, n_tokens: int) -> str:
     ).unsqueeze(0)
 
     for i in range(n_tokens):
-        logits = model(tokens[:, -model.block_size :])  # (B, T, C)
+        logits = model(tokens[:, -block_size:])  # (B, T, C)
         logits = logits[:, -1, :]  # only use last pred col. (B, C)
 
         probs = F.softmax(logits, dim=-1)
@@ -104,7 +106,7 @@ if __name__ == "__main__":
     )
 
     print("\nGenerating text")
-    print(generate_text(gpt, bpe, prompt="To be or ", n_tokens=1_000))
+    print(generate_text(gpt, BLOCK_SIZE, bpe, prompt="To be or ", n_tokens=1_000))
 
     save_name = "war_and_peace"
     plot_loss(loss_steps, train_losses, val_losses, Path("loss_plots") / save_name)
