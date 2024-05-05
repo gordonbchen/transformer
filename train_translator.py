@@ -160,7 +160,7 @@ def translate(
         [], block_size, spa_bpe, add_sot=True, add_eot=True
     ).unsqueeze(0)
 
-    for i in range(block_size):
+    for i in range(block_size - 1):
         logits = model((eng_tokens, spa_tokens))[:, i, :]
         probs = F.softmax(logits, dim=-1)
         next_spa_token = torch.multinomial(probs, num_samples=1)
