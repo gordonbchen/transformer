@@ -147,19 +147,19 @@ def translate(
 
 
 if __name__ == "__main__":
-    BLOCK_SIZE = 64
+    BLOCK_SIZE = 50
     eng_bpe, spa_bpe, train_dl, val_dl = get_encoders_dataloaders(
-        vocab_size=256 + 256,
+        vocab_size=256 + 512,
         block_size=BLOCK_SIZE,
-        val_split=0.1,
+        val_split=0.15,
         batch_size=32,
     )
 
     translator = Translator(
         source_vocab_size=len(eng_bpe.vocab),
         target_vocab_size=len(spa_bpe.vocab),
-        d_model=256,
-        d_ffwd=1024,
+        d_model=512,
+        d_ffwd=2048,
         block_size=BLOCK_SIZE,
         n_heads=8,
         n_layers=8,
@@ -174,9 +174,9 @@ if __name__ == "__main__":
         optimizer=optimizer,
         train_dl=train_dl,
         val_dl=val_dl,
-        steps=5_000,
-        eval_step_size=250,
-        eval_steps=10,
+        steps=15_000,
+        eval_step_size=500,
+        eval_steps=15,
         cross_entropy_ignore_index=spa_bpe.special_tokens["PAD"],
     )
 
