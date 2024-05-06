@@ -17,18 +17,25 @@ class HyperParams:
     print(f"\nUsing device: {DEVICE}")
 
 
-def calc_batch_loss(logits: torch.Tensor, yb: torch.Tensor) -> torch.Tensor:
+def calc_batch_loss(
+    logits: torch.Tensor, yb: torch.Tensor, cross_entropy_ignore_index: int
+) -> torch.Tensor:
     """Calculate model loss on a batch of data."""
     B, T, C = logits.shape
     logits = logits.view(B * T, C)
     yb = yb.view(B * T)
 
-    loss = F.cross_entropy(logits, yb)
+    loss = F.cross_entropy(logits, yb, ignore_index=cross_entropy_ignore_index)
     return loss
 
 
 @torch.no_grad()
-def eval_model(model: nn.Module, val_dl: DataLoader, eval_steps: int) -> float:
+def eval_model(
+    model: nn.Module,
+    val_dl: DataLoader,
+    eval_steps: int,
+    cross_entropy_ignore_index: int,
+) -> float:
     """Evaluate model loss."""
     model.eval()
 
@@ -37,7 +44,7 @@ def eval_model(model: nn.Module, val_dl: DataLoader, eval_steps: int) -> float:
     total_loss = 0
     for step in range(eval_steps):
         xb, yb, val_dl_iterator = get_next_batch(val_dl_iterator, val_dl)
-        total_loss += calc_batch_loss(model(xb), yb).item()
+        total_loss += calc_batch_loss(model(xb), yb, cross_entropy_ignore_index).item()
 
     return total_loss / eval_steps
 
@@ -50,6 +57,7 @@ def train_model(
     steps: int,
     eval_step_size: int,
     eval_steps: int,
+    cross_entropy_ignore_index: int = -100,
 ) -> tuple[list[float], list[float]]:
     """Train a model. Return step number, train and val losses."""
     loss_steps = []
@@ -65,7 +73,7 @@ def train_model(
 
         xb, yb, train_dl_iterator = get_next_batch(train_dl_iterator, train_dl)
 
-        loss = calc_batch_loss(model(xb), yb)
+        loss = calc_batch_loss(model(xb), yb, cross_entropy_ignore_index)
         loss.backward()
         optimizer.step()
 
@@ -73,7 +81,7 @@ def train_model(
             loss_steps.append(step)
             train_losses.append(loss.item())
 
-            val_loss = eval_model(model, val_dl, eval_steps)
+            val_loss = eval_model(model, val_dl, eval_steps, cross_entropy_ignore_index)
             val_losses.append(val_loss)
 
     print(f"\nMin val loss: {min(val_losses)}")

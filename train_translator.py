@@ -31,14 +31,8 @@ def get_encoders_dataloaders(
         spa_lines.append(spa)
 
     # Train english and spanish bpe tokenizers.
-    # Save 3 tokens for sot, eot, and pad.
-    eng_bpe = BPE(eng_lines, vocab_size - 3)
-    spa_bpe = BPE(spa_lines, vocab_size - 3)
-
-    # Add sot and eot tokens.
-    special_tokens = ["<sot>", "<eot>", "<pad>"]
-    eng_bpe.add_special_tokens(special_tokens)
-    spa_bpe.add_special_tokens(special_tokens)
+    eng_bpe = BPE(eng_lines, vocab_size, ["PAD"])
+    spa_bpe = BPE(spa_lines, vocab_size, ["START", "END", "PAD"])
 
     # Tokenize lines.
     print("\nTokenizing text")
@@ -74,9 +68,8 @@ class TranslationDataset(Dataset):
 
         i = 0
         while i < len(eng_data):
-            if (len(eng_data[i]) > block_size - 2) or (  # -2 for sot and eot tokens.
-                len(spa_data[i]) > block_size - 2
-            ):
+            # Spanish examples will have START (decoder) and END (targets) added, so -1.
+            if (len(eng_data[i]) > block_size) or (len(spa_data[i]) > block_size - 1):
                 eng_data.pop(i)
                 spa_data.pop(i)
             else:
@@ -101,49 +94,26 @@ class TranslationDataset(Dataset):
     def __getitem__(
         self, idx: int
     ) -> tuple[tuple[torch.Tensor, torch.Tensor], torch.Tensor]:
-        eng_tokens = preprocess_tokens(
-            self.eng_data[idx],
-            self.block_size,
-            self.eng_bpe,
-            add_sot=True,
-            add_eot=True,
-        )
-        spa_decoder_tokens = preprocess_tokens(
-            self.spa_data[idx],
+        eng_tokens = pad_tokens(self.eng_data[idx], self.block_size, self.eng_bpe)
+        spa_decoder_tokens = pad_tokens(
+            [self.spa_bpe.special_tokens["START"]] + self.spa_data[idx],
             self.block_size,
             self.spa_bpe,
-            add_sot=True,
-            add_eot=False,
         )
-        spa_target_tokens = preprocess_tokens(
-            self.spa_data[idx],
+        spa_target_tokens = pad_tokens(
+            self.spa_data[idx] + [self.spa_bpe.special_tokens["END"]],
             self.block_size,
             self.spa_bpe,
-            add_sot=False,
-            add_eot=True,
         )
         return (eng_tokens, spa_decoder_tokens), spa_target_tokens
 
 
-def preprocess_tokens(
-    tokens: list[int],
-    block_size: int,
-    bpe: BPE,
-    add_sot: bool,
-    add_eot: bool,
-) -> torch.Tensor:
-    """Add sot, eot, and pad tokens to fit block size."""
-    tokens = torch.tensor(tokens, dtype=torch.int64)
+def pad_tokens(tokens: list[int], block_size: int, bpe: BPE) -> torch.Tensor:
+    """Pad tokens to fit block size and return as tensor."""
+    for i in range(block_size - len(tokens)):
+        tokens.append(bpe.special_tokens["PAD"])
 
-    if add_sot:
-        tokens = torch.cat((torch.tensor([bpe.special_tokens["<sot>"]]), tokens))
-
-    if add_eot:
-        tokens = torch.cat((tokens, torch.tensor([bpe.special_tokens["<eot>"]])))
-
-    pad_tokens = [bpe.special_tokens["<pad>"] for i in range(block_size - len(tokens))]
-    tokens = torch.cat((tokens, torch.tensor(pad_tokens)))
-    return tokens.to(dtype=torch.int64, device=HyperParams.DEVICE)
+    return torch.tensor(tokens, dtype=torch.int64)
 
 
 @torch.no_grad()
@@ -152,20 +122,23 @@ def translate(
 ) -> str:
     model.eval()
 
-    eng_tokens = preprocess_tokens(
-        eng_bpe.encode(eng_text), block_size, eng_bpe, add_sot=True, add_eot=True
-    ).unsqueeze(0)
-
-    spa_tokens = preprocess_tokens(
-        [], block_size, spa_bpe, add_sot=True, add_eot=True
-    ).unsqueeze(0)
+    eng_tokens = (
+        pad_tokens(eng_bpe.encode(eng_text), block_size, eng_bpe)
+        .unsqueeze(0)
+        .to(device=HyperParams.DEVICE)
+    )
+    spa_tokens = (
+        pad_tokens([spa_bpe.special_tokens["START"]], block_size, spa_bpe)
+        .unsqueeze(0)
+        .to(device=HyperParams.DEVICE)
+    )
 
     for i in range(block_size - 1):
         logits = model((eng_tokens, spa_tokens))[:, i, :]
         probs = F.softmax(logits, dim=-1)
         next_spa_token = torch.multinomial(probs, num_samples=1)
 
-        if next_spa_token == spa_bpe.special_tokens["<eot>"]:
+        if next_spa_token == spa_bpe.special_tokens["END"]:
             break
 
         spa_tokens[0, i + 1] = next_spa_token
@@ -176,7 +149,7 @@ def translate(
 if __name__ == "__main__":
     BLOCK_SIZE = 64
     eng_bpe, spa_bpe, train_dl, val_dl = get_encoders_dataloaders(
-        vocab_size=256 + 256 + 3,
+        vocab_size=256 + 256,
         block_size=BLOCK_SIZE,
         val_split=0.1,
         batch_size=32,
@@ -204,6 +177,7 @@ if __name__ == "__main__":
         steps=5_000,
         eval_step_size=250,
         eval_steps=10,
+        cross_entropy_ignore_index=spa_bpe.special_tokens["PAD"],
     )
 
     print("\nTranslating")
