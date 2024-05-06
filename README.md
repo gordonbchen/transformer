@@ -12,3 +12,6 @@ Exploring how transformers work.
 * Andrej Karpathy: https://www.youtube.com/watch?v=zduSFxRajkE&ab_channel=AndrejKarpathy
 * Andrej Karpathy: https://github.com/karpathy/minbpe/tree/master
 * Wikipedia: https://en.wikipedia.org/wiki/Byte_pair_encoding
+
+### Neural Machine Translation
+* Keras: https://keras.io/examples/nlp/neural_machine_translation_with_transformer/
