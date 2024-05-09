@@ -1,5 +1,5 @@
 # Behavior
-* English-spanish translation sucks.
+* Poor text generation and English-Spanish translation (scale?).
 
 # Tasks
 * Support <pad> masking.
