@@ -101,8 +101,8 @@ if __name__ == "__main__":
         train_dl=train_dl,
         val_dl=val_dl,
         steps=5_000,
-        eval_step_size=250,
-        eval_steps=10,
+        eval_step_size=500,
+        eval_steps=15,
     )
 
     print("\nGenerating text")

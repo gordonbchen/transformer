@@ -147,9 +147,9 @@ def translate(
 
 
 if __name__ == "__main__":
-    BLOCK_SIZE = 50
+    BLOCK_SIZE = 48
     eng_bpe, spa_bpe, train_dl, val_dl = get_encoders_dataloaders(
-        vocab_size=256 + 512,
+        vocab_size=256 + 256,
         block_size=BLOCK_SIZE,
         val_split=0.15,
         batch_size=32,
@@ -164,6 +164,8 @@ if __name__ == "__main__":
         n_heads=8,
         n_layers=8,
         dropout=0.6,
+        source_pad_idx=eng_bpe.special_tokens["PAD"],
+        target_pad_idx=spa_bpe.special_tokens["PAD"],
     )
     translator = translator.to(HyperParams.DEVICE)
 
@@ -174,7 +176,7 @@ if __name__ == "__main__":
         optimizer=optimizer,
         train_dl=train_dl,
         val_dl=val_dl,
-        steps=15_000,
+        steps=5_000,
         eval_step_size=500,
         eval_steps=15,
         cross_entropy_ignore_index=spa_bpe.special_tokens["PAD"],
