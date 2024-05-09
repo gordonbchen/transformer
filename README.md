@@ -1,5 +1,10 @@
 # transformer
 Exploring how transformers work.
+* Multi-head attention
+* Sin position encoding
+* Byte-pair encoding
+* Transformer encoder and decoder layers
+* Translator and GPT models
 
 ## Sources
 
