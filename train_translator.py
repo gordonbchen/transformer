@@ -147,6 +147,7 @@ def translate(
 
 
 if __name__ == "__main__":
+    # Get data.
     BLOCK_SIZE = 48
     eng_bpe, spa_bpe, train_dl, val_dl = get_encoders_dataloaders(
         vocab_size=256 + 256,
@@ -155,6 +156,7 @@ if __name__ == "__main__":
         batch_size=32,
     )
 
+    # Create model.
     translator = Translator(
         source_vocab_size=len(eng_bpe.vocab),
         target_vocab_size=len(spa_bpe.vocab),
@@ -169,8 +171,8 @@ if __name__ == "__main__":
     )
     translator = translator.to(HyperParams.DEVICE)
 
+    # Train model.
     optimizer = torch.optim.Adam(translator.parameters(), lr=3e-4)
-
     loss_steps, train_losses, val_losses = train_model(
         model=translator,
         optimizer=optimizer,
@@ -182,26 +184,32 @@ if __name__ == "__main__":
         cross_entropy_ignore_index=spa_bpe.special_tokens["PAD"],
     )
 
+    # Translate new text.
     print("\nTranslating")
     eng_sentences = [
         "I like to eat apples and swim.",
         "Can you speak French?",
-        "You can't blame her for not knowing what she hasn't been taught.",
         "Get off my lawn!",
         "He can speak ten languages.",
         "I met a girl I like very much.",
         "I am going to a wedding tomorrow.",
         "Do you want to have lunch with me tomorrow?",
     ]
-    for eng_sentence in eng_sentences:
-        spa_sentence = translate(eng_sentence, translator, eng_bpe, spa_bpe, BLOCK_SIZE)
+    spa_sentences = [
+        translate(eng_sentence, translator, eng_bpe, spa_bpe, BLOCK_SIZE)
+        for eng_sentence in eng_sentences
+    ]
 
-        print(f"Eng: {eng_sentence}")
-        print(f"Spa: {spa_sentence}\n")
+    # Save model outputs.
+    save_dir = Path("outputs") / "eng_spa"
+    save_dir.mkdir(parents=True, exist_ok=True)
 
-    save_name = "eng_spa"
-    plot_loss(loss_steps, train_losses, val_losses, Path("loss_plots") / save_name)
+    with open(save_dir / "new_translations.txt", mode="w") as f:
+        for eng_sentence, spa_sentence in zip(eng_sentences, spa_sentences):
+            lines = f"{eng_sentence}\n{spa_sentence}\n\n"
+            print(lines)
+            f.write(lines)
 
-    weights_path = Path("weights")
-    weights_path.mkdir(exist_ok=True)
-    torch.save(translator.state_dict(), weights_path / f"{save_name}.pt")
+    plot_loss(loss_steps, train_losses, val_losses, save_dir / "loss_plot.png")
+
+    torch.save(translator.state_dict(), save_dir / "weights.pt")

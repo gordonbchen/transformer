@@ -73,6 +73,7 @@ def generate_text(
 
 
 if __name__ == "__main__":
+    # Get data.
     BLOCK_SIZE = 128
     bpe, train_dl, val_dl = get_encoder_dataloaders(
         "datasets/war_and_peace.txt",
@@ -82,6 +83,7 @@ if __name__ == "__main__":
         batch_size=32,
     )
 
+    # Create model.
     gpt = GPT(
         vocab_size=len(bpe.vocab),
         d_model=256,
@@ -93,8 +95,8 @@ if __name__ == "__main__":
     )
     gpt = gpt.to(HyperParams.DEVICE)
 
+    # Train model.
     optimizer = torch.optim.Adam(gpt.parameters(), lr=3e-4)
-
     loss_steps, train_losses, val_losses = train_model(
         gpt,
         optimizer=optimizer,
@@ -105,12 +107,18 @@ if __name__ == "__main__":
         eval_steps=15,
     )
 
+    # Generate new text.
     print("\nGenerating text")
-    print(generate_text(gpt, BLOCK_SIZE, bpe, prompt="To be or ", n_tokens=1_000))
+    new_text = generate_text(gpt, BLOCK_SIZE, bpe, prompt="To be or ", n_tokens=1_000)
+    print(new_text)
 
-    save_name = "war_and_peace"
-    plot_loss(loss_steps, train_losses, val_losses, Path("loss_plots") / save_name)
+    # Save model outputs.
+    save_dir = Path("outputs") / "war_and_peace"
+    save_dir.mkdir(parents=True, exist_ok=True)
 
-    weights_path = Path("weights")
-    weights_path.mkdir(exist_ok=True)
-    torch.save(gpt.state_dict(), weights_path / f"{save_name}.pt")
+    with open(save_dir / "new_text.txt", mode="w") as f:
+        f.write(new_text)
+
+    plot_loss(loss_steps, train_losses, val_losses, save_dir / "loss_plot.png")
+
+    torch.save(gpt.state_dict(), save_dir / "weights.pt")

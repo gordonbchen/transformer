@@ -129,6 +129,4 @@ def plot_loss(
 
     ax.grid(visible=True, which="both", axis="both")
 
-    if not save_path.parent.exists():
-        save_path.parent.mkdir()
     fig.savefig(save_path)
