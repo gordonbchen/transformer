@@ -17,7 +17,7 @@ def get_encoders_dataloaders(
 ) -> tuple[BPE, BPE, DataLoader, DataLoader]:
     """Return eng and spa encoders, and train and val dataloaders"""
     # Read data.
-    with open("datasets/eng_spa.txt") as f:
+    with open("datasets/eng_spa.txt", mode="r", encoding="utf-8") as f:
         lines = f.read().split("\n")
     lines.pop()  # Remove empty last line
 

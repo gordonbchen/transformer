@@ -17,7 +17,7 @@ def get_encoder_dataloaders(
     batch_size: int,
 ) -> tuple[BPE, DataLoader, DataLoader]:
     """Get encoded text data. Return encoder, train and val dataloaders."""
-    with open(text_file, mode="r") as f:
+    with open(text_file, mode="r", encoding="utf-8") as f:
         text = f.read()
 
     bpe = BPE(text, vocab_size)
