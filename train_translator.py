@@ -4,7 +4,7 @@ from torch.utils.data import Dataset, DataLoader, random_split
 
 from pathlib import Path
 
-from bpe import BytePairEncoder as BPE
+from bpe import BPE, load_bpt
 from models.translator import Translator
 from train_funcs import HyperParams, train_model, plot_loss
 
@@ -150,7 +150,6 @@ if __name__ == "__main__":
     # Get data.
     BLOCK_SIZE = 48
     eng_bpe, spa_bpe, train_dl, val_dl = get_encoders_dataloaders(
-        vocab_size=256 + 256,
         block_size=BLOCK_SIZE,
         val_split=0.15,
         batch_size=32,
