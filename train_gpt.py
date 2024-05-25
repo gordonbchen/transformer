@@ -6,24 +6,18 @@ from pathlib import Path
 
 from train_funcs import HyperParams, train_model, plot_loss
 from models.gpt import GPT
-from bpe import BytePairEncoder as BPE
+from bpe import BPE, load_bpe
 
 
 def get_encoder_dataloaders(
-    text_file: str,
-    vocab_size: int,
+    data_dir: Path,
     block_size: int,
     val_split: float,
     batch_size: int,
 ) -> tuple[BPE, DataLoader, DataLoader]:
     """Get encoded text data. Return encoder, train and val dataloaders."""
-    with open(text_file, mode="r", encoding="utf-8") as f:
-        text = f.read()
-
-    bpe = BPE(text, vocab_size)
-
-    print("\nEncoding text")
-    tokens = torch.tensor(bpe.encode(text), dtype=torch.int64)
+    bpe = load_bpe(data_dir / "bpe.model")
+    tokens = torch.load(data_dir / "tokens.pt")
 
     ds = GPTDataset(tokens, block_size)
     train_ds, val_ds = random_split(ds, [1 - val_split, val_split])
@@ -76,8 +70,7 @@ if __name__ == "__main__":
     # Get data.
     BLOCK_SIZE = 128
     bpe, train_dl, val_dl = get_encoder_dataloaders(
-        "datasets/war_and_peace.txt",
-        vocab_size=256 + 256,
+        Path("data/war_and_peace"),
         block_size=BLOCK_SIZE,
         val_split=0.01,
         batch_size=32,
