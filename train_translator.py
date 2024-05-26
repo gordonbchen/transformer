@@ -4,43 +4,27 @@ from torch.utils.data import Dataset, DataLoader, random_split
 
 from pathlib import Path
 
-from bpe import BPE, load_bpt
+from bpe import BPE, load_bpe
 from models.translator import Translator
 from train_funcs import HyperParams, train_model, plot_loss
 
 
 def get_encoders_dataloaders(
-    vocab_size: int,
     block_size: int,
     val_split: float,
     batch_size: int,
 ) -> tuple[BPE, BPE, DataLoader, DataLoader]:
     """Return eng and spa encoders, and train and val dataloaders"""
-    # Read data.
-    with open("datasets/eng_spa.txt", mode="r", encoding="utf-8") as f:
-        lines = f.read().split("\n")
-    lines.pop()  # Remove empty last line
+    # Load bpe and tokens.
+    data_dir = Path("data") / "eng_spa"
+    eng_bpe = load_bpe(data_dir / "eng_bpe.model")
+    spa_bpe = load_bpe(data_dir / "spa_bpe.model")
 
-    # Split into english and spanish text.
-    eng_lines = []
-    spa_lines = []
-
-    for line in lines:
-        eng, spa = line.split("\t")
-        eng_lines.append(eng)
-        spa_lines.append(spa)
-
-    # Train english and spanish bpe tokenizers.
-    eng_bpe = BPE(eng_lines, vocab_size, ["PAD"])
-    spa_bpe = BPE(spa_lines, vocab_size, ["START", "END", "PAD"])
-
-    # Tokenize lines.
-    print("\nTokenizing text")
-    eng_data = [eng_bpe.encode(i) for i in eng_lines]
-    spa_data = [spa_bpe.encode(i) for i in spa_lines]
+    eng_tokens = torch.load(data_dir / "eng_tokens.pt")
+    spa_tokens = torch.load(data_dir / "spa_tokens.pt")
 
     # Create dataloaders.
-    ds = TranslationDataset(eng_data, spa_data, eng_bpe, spa_bpe, block_size)
+    ds = TranslationDataset(eng_tokens, spa_tokens, eng_bpe, spa_bpe, block_size)
     train_ds, val_ds = random_split(ds, [1 - val_split, val_split])
 
     train_dl = DataLoader(train_ds, batch_size, shuffle=True)
@@ -57,31 +41,33 @@ class TranslationDataset(Dataset):
 
     def __init__(
         self,
-        eng_data: list[torch.Tensor],
-        spa_data: list[torch.Tensor],
+        eng_tokens: list[torch.Tensor],
+        spa_tokens: list[torch.Tensor],
         eng_bpe: BPE,
         spa_bpe: BPE,
         block_size: int,
     ) -> None:
         # Remove examples longer than nonspecial block_size.
-        n_unfiltered_lines = len(eng_data)
+        n_unfiltered_lines = len(eng_tokens)
 
         i = 0
-        while i < len(eng_data):
+        while i < len(eng_tokens):
             # Spanish examples will have START (decoder) and END (targets) added, so -1.
-            if (len(eng_data[i]) > block_size) or (len(spa_data[i]) > block_size - 1):
-                eng_data.pop(i)
-                spa_data.pop(i)
+            if (len(eng_tokens[i]) > block_size) or (
+                len(spa_tokens[i]) > block_size - 1
+            ):
+                eng_tokens.pop(i)
+                spa_tokens.pop(i)
             else:
                 i += 1
 
-        self.n_lines = len(eng_data)
+        self.n_lines = len(eng_tokens)
         print(f"\nExamples lost: {n_unfiltered_lines} - {self.n_lines} ", end="")
         print(f"= {n_unfiltered_lines - self.n_lines}")
 
         # Save data and bpes.
-        self.eng_data = eng_data
-        self.spa_data = spa_data
+        self.eng_tokens = eng_tokens
+        self.spa_tokens = spa_tokens
 
         self.block_size = block_size
 
@@ -94,26 +80,36 @@ class TranslationDataset(Dataset):
     def __getitem__(
         self, idx: int
     ) -> tuple[tuple[torch.Tensor, torch.Tensor], torch.Tensor]:
-        eng_tokens = pad_tokens(self.eng_data[idx], self.block_size, self.eng_bpe)
+        eng_tokens = pad_tokens(self.eng_tokens[idx], self.block_size, self.eng_bpe)
         spa_decoder_tokens = pad_tokens(
-            [self.spa_bpe.special_tokens["START"]] + self.spa_data[idx],
+            torch.cat(
+                [
+                    torch.tensor([self.spa_bpe.special_tokens["START"]]),
+                    self.spa_tokens[idx],
+                ]
+            ),
             self.block_size,
             self.spa_bpe,
         )
         spa_target_tokens = pad_tokens(
-            self.spa_data[idx] + [self.spa_bpe.special_tokens["END"]],
+            torch.cat(
+                [
+                    self.spa_tokens[idx],
+                    torch.tensor([self.spa_bpe.special_tokens["END"]]),
+                ]
+            ),
             self.block_size,
             self.spa_bpe,
         )
         return (eng_tokens, spa_decoder_tokens), spa_target_tokens
 
 
-def pad_tokens(tokens: list[int], block_size: int, bpe: BPE) -> torch.Tensor:
+def pad_tokens(tokens: torch.Tensor, block_size: int, bpe: BPE) -> torch.Tensor:
     """Pad tokens to fit block size and return as tensor."""
-    for i in range(block_size - len(tokens)):
-        tokens.append(bpe.special_tokens["PAD"])
-
-    return torch.tensor(tokens, dtype=torch.int64)
+    padding = torch.full(
+        [block_size - len(tokens)], fill_value=bpe.special_tokens["PAD"]
+    )
+    return torch.cat([tokens, padding])
 
 
 @torch.no_grad()
@@ -123,12 +119,20 @@ def translate(
     model.eval()
 
     eng_tokens = (
-        pad_tokens(eng_bpe.encode(eng_text), block_size, eng_bpe)
+        pad_tokens(
+            torch.tensor(eng_bpe.encode(eng_text), dtype=torch.int64),
+            block_size,
+            eng_bpe,
+        )
         .unsqueeze(0)
         .to(device=HyperParams.DEVICE)
     )
     spa_tokens = (
-        pad_tokens([spa_bpe.special_tokens["START"]], block_size, spa_bpe)
+        pad_tokens(
+            torch.tensor([spa_bpe.special_tokens["START"]], dtype=torch.int64),
+            block_size,
+            spa_bpe,
+        )
         .unsqueeze(0)
         .to(device=HyperParams.DEVICE)
     )

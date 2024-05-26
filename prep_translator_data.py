@@ -2,7 +2,7 @@ import torch
 
 from pathlib import Path
 
-from bpe import train_bpe, load_bpe
+from bpe import train_bpe
 
 
 # Read data.
@@ -28,8 +28,8 @@ spa_bpe = train_bpe(
 
 # Tokenize lines.
 print("\nTokenizing text")
-eng_tokens = torch.tensor([eng_bpe.encode(i) for i in eng_lines], dtype=torch.int64)
-spa_tokens = torch.tensor([spa_bpe.encode(i) for i in spa_lines], dtype=torch.int64)
+eng_tokens = [torch.tensor(eng_bpe.encode(i), dtype=torch.int64) for i in eng_lines]
+spa_tokens = [torch.tensor(spa_bpe.encode(i), dtype=torch.int64) for i in spa_lines]
 
 # Save tokens and bpe.
 save_dir = Path(f"data/{dataset}")
@@ -40,10 +40,3 @@ torch.save(spa_tokens, save_dir / "spa_tokens.pt")
 
 eng_bpe.save(save_dir / "eng_bpe.model")
 spa_bpe.save(save_dir / "spa_bpe.model")
-
-# Check correctness.
-new_eng_bpe = load_bpe(save_dir / "eng_bpe.model")
-new_eng_tokens = torch.tensor(
-    [new_eng_bpe.encode(i) for i in eng_lines], dtype=torch.int64
-)
-assert (new_eng_tokens == eng_tokens).all(), "Failed to save BPE correctly."
