@@ -147,7 +147,7 @@ def translate(
 
         spa_tokens[0, i + 1] = next_spa_token
 
-    return spa_bpe.decode(spa_tokens[0, 1:].tolist())
+    return spa_bpe.decode(spa_tokens[0, 1 : i + 1].tolist())
 
 
 if __name__ == "__main__":
