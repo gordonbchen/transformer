@@ -68,7 +68,7 @@ def generate_text(
 
 if __name__ == "__main__":
     # Get data.
-    BLOCK_SIZE = 128
+    BLOCK_SIZE = 256
     bpe, train_dl, val_dl = get_encoder_dataloaders(
         Path("data/war_and_peace"),
         block_size=BLOCK_SIZE,
@@ -83,7 +83,7 @@ if __name__ == "__main__":
         d_ffwd=1024,
         block_size=BLOCK_SIZE,
         n_heads=8,
-        n_layers=8,
+        n_layers=10,
         dropout=0.6,
     )
     gpt = gpt.to(HyperParams.DEVICE)
@@ -95,8 +95,8 @@ if __name__ == "__main__":
         optimizer=optimizer,
         train_dl=train_dl,
         val_dl=val_dl,
-        steps=5_000,
-        eval_step_size=500,
+        steps=30_000,
+        eval_step_size=1_000,
         eval_steps=15,
     )
 
