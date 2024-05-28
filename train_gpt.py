@@ -69,8 +69,9 @@ def generate_text(
 if __name__ == "__main__":
     # Get data.
     BLOCK_SIZE = 256
+    dataset = "shakespeare"
     bpe, train_dl, val_dl = get_encoder_dataloaders(
-        Path("data/war_and_peace"),
+        Path("data") / dataset,
         block_size=BLOCK_SIZE,
         val_split=0.01,
         batch_size=32,
@@ -106,7 +107,7 @@ if __name__ == "__main__":
     print(new_text)
 
     # Save model outputs.
-    save_dir = Path("outputs") / "war_and_peace"
+    save_dir = Path("outputs") / dataset
     save_dir.mkdir(parents=True, exist_ok=True)
 
     with open(save_dir / "new_text.txt", mode="w") as f:

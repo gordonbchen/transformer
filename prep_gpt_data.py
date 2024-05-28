@@ -6,7 +6,7 @@ from bpe import train_bpe
 
 
 # Read text and create bpe.
-dataset = "war_and_peace"
+dataset = "shakespeare"
 with open(f"datasets/{dataset}.txt", mode="r", encoding="utf-8") as f:
     text = f.read()
 
