@@ -2,6 +2,8 @@ import torch
 import torch.nn.functional as F
 from torch.utils.data import Dataset, DataLoader, random_split
 
+from torchinfo import summary
+
 from pathlib import Path
 
 from bpe import BPE, load_bpe
@@ -173,6 +175,8 @@ if __name__ == "__main__":
         target_pad_idx=spa_bpe.special_tokens["PAD"],
     )
     translator = translator.to(HyperParams.DEVICE)
+
+    summary(translator)
 
     # Train model.
     optimizer = torch.optim.Adam(translator.parameters(), lr=3e-4)

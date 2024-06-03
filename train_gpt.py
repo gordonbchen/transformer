@@ -2,6 +2,8 @@ import torch
 import torch.nn.functional as F
 from torch.utils.data import Dataset, DataLoader, random_split
 
+from torchinfo import summary
+
 from pathlib import Path
 
 from train_funcs import HyperParams, train_model, plot_loss
@@ -88,6 +90,8 @@ if __name__ == "__main__":
         dropout=0.6,
     )
     gpt = gpt.to(HyperParams.DEVICE)
+
+    summary(gpt)
 
     # Train model.
     optimizer = torch.optim.Adam(gpt.parameters(), lr=3e-4)

@@ -7,7 +7,7 @@ Exploring how transformers work.
 * Translator and GPT models
 
 ## Usage
-* Requirements: python3, pytorch, (matplotlib + jupyter optional for notebooks)
+* Requirements: python3, pytorch, torchinfo (for displaying model params), (matplotlib + jupyter optional for notebooks)
 
 BPE training: Run `python3 prep_(gpt|translator)_data.py`. This will train a byte-pair encoder and save tokenized outputs (`tokens.pt`) and the trained BPE (`bpe.model`) in the `data/(dataset name)` dir.
 
